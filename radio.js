@@ -34,14 +34,23 @@ function radioStations() {
   const subs = store.get("radioSubs", []).map(s => byId.get(String(s.id))).filter(Boolean);
   if (subs.length) st.push({ slug: "submitted", name: "Submitted", blurb: "Music artists submitted for Splendor Radio.", tracks: subs, h: 40 });
   st.push({ slug: "favourites", name: "Collectors' Favourites", blurb: "What collectors hold the most.", tracks: spread(TRACKS.slice().sort((a, b) => b.issued - a.issued), 2, 25), h: 140 });
+  // Vibrr Radio, live: the songs artists opted in on Vibrr, most played first (plays + reactions straight from Vibrr's feed)
+  if (typeof VR !== "undefined" && VR.ok) {
+    const vt = [...VR.byId.keys()].map(id => byId.get(id)).filter(Boolean).sort((a, b) => VR.byId.get(b.id).plays - VR.byId.get(a.id).plays);
+    const plays = [...VR.byId.values()].reduce((n, v) => n + v.plays, 0);
+    st.unshift({ slug: "vibrr-radio", name: "Vibrr Radio", chip: "VIBRR RADIO · LIVE", ctx: "Vibrr Radio · live", eyebrow: "Live from Vibrr Radio",
+      blurb: `Live from Vibrr Radio: the songs artists opted in on Vibrr, most played first. ${plays.toLocaleString()} plays so far. Plays and reactions come straight from Vibrr.`,
+      head: "Most played on Vibrr Radio", tracks: vt, h: 275,
+      meta: x => { const v = VR.byId.get(x.id) || { plays: 0, reacts: 0 }; return `${plural(v.plays, "play")}${v.reacts ? ` · ${plural(v.reacts, "reaction")}` : ""}`; } });
+  }
   return st.filter(s => s.tracks.length);
 }
 const stationCard = s => `<a class="station" href="#/radio/${enc(s.slug)}" style="--sh:${s.h}">
-  <div class="st-art">${mosaic(s.tracks.map(t => t.id))}<span class="st-live">SPLENDOR RADIO</span><button class="fab" data-station="${esc(s.slug)}" title="Play ${esc(s.name)}">&#9654;</button></div>
+  <div class="st-art">${mosaic(s.tracks.map(t => t.id))}<span class="st-live">${esc(s.chip || "SPLENDOR RADIO")}</span><button class="fab" data-station="${esc(s.slug)}" title="Play ${esc(s.name)}">&#9654;</button></div>
   <div class="c"><div class="t">${esc(s.name)}</div><div class="a">${plural(s.tracks.length, "song")} · ${plural(new Set(s.tracks.map(t => t.artist)).size, "artist")}</div></div></a>`;
 function playStation(slug, start = 0) {
   const s = radioStations().find(x => x.slug === slug); if (!s) return;
-  playQueue(s.tracks, start, `Splendor Radio · ${s.name}`);
+  playQueue(s.tracks, start, s.ctx || `Splendor Radio · ${s.name}`);
 }
 
 function radioHome() {
@@ -60,7 +69,8 @@ function radioHome() {
         <div class="leg"><span class="sw" style="background:var(--c2)"></span><b style="font-family:Inter;font-size:14px">Undiscovered</b><span class="r">fewer collects = more room to grow</span><b>${RADIO.weights.under * 100}%</b></div>
         <div class="leg"><span class="sw" style="background:var(--c3)"></span><b style="font-family:Inter;font-size:14px">Complete Passport</b><span class="r">credits, ISRC, ℗/©, permissions, split on chain, story</span><b>${RADIO.weights.passport * 100}%</b></div>
       </div>
-      <p class="muted small">Max ${RADIO.perArtist} songs per artist per station so nobody dominates. Next: SI that actually listens (sound, craft, originality), community signals from curators with good track records, and every pick logged on chain so anyone can audit it.</p></div>
+      <p class="muted small">Max ${RADIO.perArtist} songs per artist per station so nobody dominates. Next: SI that actually listens (sound, craft, originality), community signals from curators with good track records, and every pick logged on chain so anyone can audit it.</p>
+      ${typeof VR !== "undefined" && VR.ok ? `<p class="muted small"><b style="color:var(--text)">Vibrr Radio</b> is Vibrr's own live station, played here: songs their artists opted in on Vibrr, ordered by real plays from Vibrr's feed.</p>` : ""}</div>
     <div class="panel"><h2>For artists</h2>
       <ol class="rules">
         <li><b>Opt in.</b> Submit music you've already minted (later: tick "OK for Splendor Radio" when you mint on Vibrr).</li>
@@ -77,11 +87,11 @@ function stationPage(slug) {
   const s = radioStations().find(x => x.slug === slug); if (!s) return notFound();
   LISTS.station = s.tracks;
   view().innerHTML = `<section class="plhead" style="background:linear-gradient(180deg,hsla(${s.h},70%,45%,.25),rgba(14,14,17,.6))">${mosaic(s.tracks.map(t => t.id), "mosaic xl")}
-    <div class="plmeta"><div class="eyebrow">Splendor Radio station</div><h1>${esc(s.name)}</h1><div class="desc">${esc(s.blurb)}</div>
+    <div class="plmeta"><div class="eyebrow">${esc(s.eyebrow || "Splendor Radio station")}</div><h1>${esc(s.name)}</h1><div class="desc">${esc(s.blurb)}</div>
       <div class="muted small">${plural(s.tracks.length, "song")} · ${plural(new Set(s.tracks.map(t => t.artist)).size, "artist")} · free to play</div>
-      <div class="actions"><button class="btn big" data-station="${esc(s.slug)}">&#9654; Play station</button><button class="btn ghost" id="st-shuf">&#8644; Shuffle</button><button class="btn ghost" id="st-share">Share</button></div></div></section>
-    ${listHead("Why it's here")}<div class="tracks" data-list="station" data-ctx="${esc("Splendor Radio · " + s.name)}">${s.tracks.map((t, i) => trackRow(t, i, { thumb: 1, artist: 1, meta: x => siPick(x).why.join(" · ") || "open-rules pick" })).join("")}</div>`;
-  $("#st-shuf").onclick = () => playQueue(shuffled(s.tracks), 0, `Splendor Radio · ${s.name}`);
+      <div class="actions"><button class="btn big" data-station="${esc(s.slug)}">&#9654; Play station</button><button class="btn ghost" id="st-shuf">&#8644; Shuffle</button><button class="btn ghost" id="st-share">Share</button>${s.slug === "vibrr-radio" ? `<a class="btn ghost" href="https://vibrr.ai/radio" target="_blank" rel="noopener">Open Vibrr Radio ↗</a>` : ""}</div></div></section>
+    ${listHead(s.head || "Why it's here")}<div class="tracks" data-list="station" data-ctx="${esc(s.ctx || "Splendor Radio · " + s.name)}">${s.tracks.map((t, i) => trackRow(t, i, { thumb: 1, artist: 1, meta: s.meta || (x => siPick(x).why.join(" · ") || "open-rules pick") })).join("")}</div>`;
+  $("#st-shuf").onclick = () => playQueue(shuffled(s.tracks), 0, s.ctx || `Splendor Radio · ${s.name}`);
   $("#st-share").onclick = () => shareModal(`${s.name} on Splendor Radio`, location.href);
 }
 function radioSubmit() {

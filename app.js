@@ -1,4 +1,4 @@
-/* Splendor Music: prototype v0.2 (23 Nov 2026)
+/* Splendor Music: prototype v0.4.4 (24 Nov 2026: Vibrr listening copies, real album names, live Vibrr Radio station)
    Concept + product design: Lachlan Grant Splendor (Vibrr Music / Music Passport; X post 15 Sep 2026; the
    playlisting economy). "Mint on Vibrr. Listen, share and earn on Splendor Music."
    Data: public XPR Network chain data only: AtomicAssets (Vibrr's music schema "cxcmus"), Vibrr's split contract
@@ -13,7 +13,10 @@ const EXPLORER = "https://explorer.xprnetwork.org";
 // XPR's own Pinata gateway (named in Vibrr's collection data) starts a WAV in ~1.5 s vs ~6 s on the public one
 const GATEWAYS = ["https://proton.mypinata.cloud/ipfs/", "https://ipfs.filebase.io/ipfs/", "https://gateway.pinata.cloud/ipfs/", "https://dweb.link/ipfs/"];
 const SCHEMA = "cxcmus", SPLITTER = "vibrrsplit";
-const PIPE = { artist: 80, hops: 5 };              // proposed: 80% artist split, 20% down the share pipeline
+// Vibrr Radio's public feed (read only; Vibrr opened it to this site on 24 Nov 2026): play counts, reactions, real album names
+const VRADIO = "https://api.vibrr.ai/api/radio/tracks";
+const VR = { ok: false, byId: new Map() };         // template id -> { plays, reacts, album, listen, track, released, asset }
+const PIPE = { artist: 80, hops: 5 };              // example only: the artist opts in and sets the share (Vibrr is scoping it)
 const COLORS = ["var(--c1)", "var(--c2)", "var(--c3)", "var(--c4)", "var(--c5)", "var(--c6)"];
 const VIEWS = {};                                  // extra pages registered by radio.js / wallet.js
 const OWN = new Set(), OFF = new Set();            // templates you own / songs saved on this device (filled by wallet.js)
@@ -65,20 +68,57 @@ async function getJSON(url) {
   const r = await fetch(url); if (!r.ok) throw new Error(r.status + " " + url);
   return (await r.json()).data;
 }
+const albumOk = a => { a = String(a || "").trim(); return !!a && a.length <= 40 && !/[.!?]\s/.test(a); };   // some artists put a blurb in "album"
 function splitName(d) {
   const name = d.name || d.title || "Untitled";
   const parts = name.split(/\s+[—–-]\s+/);
   const album = String(d.album || "").trim();
-  const albumOk = album && album.length <= 40 && !/[.!?]\s/.test(album);   // some artists put a blurb in "album"
-  if (parts.length > 1) return { rel: parts[0].trim(), title: parts.slice(1).join(" — ").trim() };
-  return { rel: albumOk ? album : name, title: (d.title && d.title !== name) ? d.title : name };
+  const title = parts.length > 1 ? parts.slice(1).join(" — ").trim() : (d.title && d.title !== name) ? d.title : name;
+  // songs minted with Vibrr's new fields (track / released, from 24 Nov 2026) carry the REAL album title in "album"
+  if ((d.track || d.released) && albumOk(album)) return { rel: album, title };
+  if (parts.length > 1) return { rel: parts[0].trim(), title };
+  return { rel: albumOk(album) ? album : name, title };
+}
+// "2026" / "2026-11" / "2026-11-24" -> "2026" / "Nov 2026" / "24 Nov 2026"
+function relDate(s) {
+  const m = String(s || "").trim().match(/^(\d{4})(?:-(\d{1,2}))?(?:-(\d{1,2}))?/); if (!m) return String(s || "").trim();
+  if (!m[2]) return m[1];
+  const dt = new Date(Date.UTC(+m[1], +m[2] - 1, +(m[3] || 1)));
+  return dt.toLocaleDateString(undefined, m[3] ? { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" } : { month: "short", year: "numeric", timeZone: "UTC" });
+}
+/* Vibrr Radio feed: best effort, never blocks the app for long (only this site's origin is allowed to read it) */
+async function loadVibrrRadio() {
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 5000);
+  try {
+    for (let page = 1; page <= 10; page++) {
+      const r = await fetch(`${VRADIO}?limit=100&page=${page}`, { signal: ctl.signal, credentials: "omit" }); if (!r.ok) break;
+      const j = await r.json(), list = Array.isArray(j.tracks) ? j.tracks : [];
+      for (const x of list) {
+        const id = String(x.template_id || ""); if (!/^\d+$/.test(id)) continue;
+        const rc = x.reaction_counts && typeof x.reaction_counts === "object" ? x.reaction_counts : {};
+        // the feed lists each minted COPY (asset) on its own, so one song can appear more than once: add them up per song
+        const v = VR.byId.get(id) || { plays: 0, reacts: 0, album: "", listen: "", track: null, released: "", asset: "" };
+        v.plays += Math.max(0, +x.play_count || 0); v.reacts += Object.values(rc).reduce((n, k) => n + Math.max(0, +k || 0), 0);
+        v.album ||= String(x.album_title || "").trim(); v.listen ||= String(x.preview_audio_url || "").trim();
+        v.track ??= x.track_number ?? null; v.released ||= String(x.released || x.release_date || "").trim(); v.asset ||= String(x.asset_id || "");
+        VR.byId.set(id, v);
+      }
+      VR.ok = VR.byId.size > 0;
+      if (!list.length || page * (+j.limit || 100) >= (+j.total_count || 0)) break;
+    }
+  } catch {} finally { clearTimeout(timer); }
 }
 async function load() {
+  const vr = loadVibrrRadio();                       // in parallel with the chain catalogue
   let page = 1, all = [];
   while (page < 20) {
     const d = await getJSON(`${API}/templates?schema_name=${SCHEMA}&limit=100&page=${page}&order=asc&sort=created`);
     all = all.concat(d); if (d.length < 100) break; page++;
   }
+  await vr;
+  // songs on Vibrr Radio minted under another schema (e.g. "music"): fetch them too, so the station plays everything Vibrr does
+  const have = new Set(all.map(t => String(t.template_id))), extra = [...VR.byId.keys()].filter(id => !have.has(id)).slice(0, 100);
+  if (extra.length) try { all = all.concat(await getJSON(`${API}/templates?ids=${extra.join(",")}&limit=100`)); } catch {}
   for (const t of all) {
     const d = t.immutable_data || {};
     if (!d.audio) continue;                              // nothing to play
@@ -86,6 +126,8 @@ async function load() {
     const relTitle = sn.rel.trim(), key = collection + "~" + relTitle.toLowerCase();
     const tr = { id: String(t.template_id), collection, key, title: sn.title, release: relTitle,
                  artist: String(d.artist || "").trim() || c.name || collection, d, img: d.img || d.image, audio: d.audio,
+                 listen: d.listen || VR.byId.get(String(t.template_id))?.listen || "",   // Vibrr's 256k AAC listening copy (master stays in audio)
+                 schema: t.schema?.schema_name || SCHEMA,
                  max: +t.max_supply, issued: +t.issued_supply, created: +t.created_at_time,
                  author: c.author, fee: +c.market_fee || 0, colName: c.name || collection, minters: c.authorized_accounts || [] };
     TRACKS.push(tr); byId.set(tr.id, tr);
@@ -98,7 +140,10 @@ async function load() {
     // Vibrr's schema has a 'track' field: when artists fill it, play in that order (otherwise mint order)
     const tn = t => { const n = parseInt(String(t.d.track ?? "").replace(/[^0-9]/g, ""), 10); return n > 0 ? n : 1e9; };
     if (r.tracks.some(t => tn(t) < 1e9)) r.tracks.sort((x, y) => tn(x) - tn(y) || x.created - y.created);
-    const rel = r.tracks.map(t => String(t.d.released || "").trim()).find(Boolean); if (rel) r.released = rel;
+    const rel = r.tracks.map(t => String(t.d.released || "").trim() || VR.byId.get(t.id)?.released || "").find(Boolean); if (rel) r.released = rel;
+    // older songs can't be changed on chain: Vibrr Radio returns their real album name, so use it when the feed agrees
+    const al = [...new Set(r.tracks.map(t => VR.byId.get(t.id)?.album).filter(albumOk))];
+    if (al.length === 1 && al[0] !== r.title) { r.title = al[0]; r.tracks.forEach(t => t.release = al[0]); }
   }
   // tidy: the same recordings minted again by the same artist in another collection (matching ISRCs) show as ONE release.
   // Keep the cleaner mint (fewer duplicate templates), then the newer one. The other stays reachable from the Passport.
@@ -240,18 +285,20 @@ const art = t => OFF.has(t.id) && navigator.serviceWorker?.controller ? `offline
 const recentTracks = () => store.get("recent", []).map(id => byId.get(String(id))).filter(Boolean);
 
 /* ---------- player ---------- */
-const P = { queue: [], i: -1, audio: null, g: 0, tok: 0, blob: "", ctx: "", cur() { return this.queue[this.i]; } };
+const P = { queue: [], i: -1, audio: null, g: 0, m: false, tok: 0, blob: "", ctx: "", cur() { return this.queue[this.i]; } };
+// stream Vibrr's listening copy when the song has one (starts faster, far less data); the master WAV is the fallback
+const srcOf = (t, g = 0, master = false) => ipfs((!master && t.listen) || t.audio, g);
 function playQueue(tracks, start = 0, ctx = "") { tracks = tracks.filter(Boolean); if (!tracks.length) return; P.queue = tracks.slice(); P.ctx = ctx; P.i = Math.max(0, Math.min(start, tracks.length - 1)); loadTrack(); }
 function shuffled(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 function loadTrack() {
   const t = P.cur(); if (!t) return;
-  P.g = 0; const tok = ++P.tok;
+  P.g = 0; P.m = false; const tok = ++P.tok;
   if (P.blob) { URL.revokeObjectURL(P.blob); P.blob = ""; }
   const start = u => { if (tok !== P.tok) return; P.audio.src = u; P.audio.play().catch(() => {}); };
   // a song you saved offline plays from this device (served by the app itself); everything else streams from IPFS
   if (OFF.has(t.id) && navigator.serviceWorker?.controller) start(new URL(`offline/audio/${t.id}`, location.href).href);
-  else if (OFF.has(t.id) && typeof offlineUrl === "function") offlineUrl(t.id).then(u => { if (u && tok === P.tok) { P.blob = u; start(u); } else start(ipfs(t.audio, 0)); });
-  else start(ipfs(t.audio, 0));
+  else if (OFF.has(t.id) && typeof offlineUrl === "function") offlineUrl(t.id).then(u => { if (u && tok === P.tok) { P.blob = u; start(u); } else start(srcOf(t, 0)); });
+  else start(srcOf(t, 0));
   $("#p-title").textContent = t.title; $("#p-title").href = "#/passport/" + enc(t.id);
   $("#p-artist").textContent = `${t.artist} · ${P.ctx || t.release}`;
   if (typeof updateCollectBtn === "function") updateCollectBtn(t);
@@ -268,8 +315,11 @@ function initPlayer() {
   a.addEventListener("pause", () => { $("#p-play").innerHTML = "&#9654;"; document.body.classList.remove("is-playing"); });
   a.addEventListener("error", () => {
     const t = P.cur(); if (!t || !a.src) return;
-    if (a.src.startsWith("blob:") || a.src.includes("/offline/audio/")) { a.src = ipfs(t.audio, 0); a.play().catch(() => {}); return; }
-    if (P.g < GATEWAYS.length - 1) { P.g++; a.src = ipfs(t.audio, P.g); a.play().catch(() => {}); }
+    if (a.src.startsWith("blob:") || a.src.includes("/offline/audio/")) { a.src = srcOf(t, 0); a.play().catch(() => {}); return; }
+    // next gateway for the same file; once they're all tried (or it's a fixed URL), fall back from the listening copy to the master
+    const next = P.g < GATEWAYS.length - 1 ? srcOf(t, P.g + 1, P.m) : "";
+    if (next && next !== a.src) { P.g++; a.src = next; a.play().catch(() => {}); }
+    else if (!P.m && t.listen) { P.m = true; P.g = 0; a.src = srcOf(t, 0, true); a.play().catch(() => {}); }
   });
   a.addEventListener("timeupdate", () => { $("#p-cur").textContent = fmt(a.currentTime); $("#p-dur").textContent = fmt(a.duration); if (a.duration) $("#p-seek").value = 1000 * a.currentTime / a.duration; });
   a.addEventListener("ended", () => { if (P.i < P.queue.length - 1) { P.i++; loadTrack(); } });
@@ -502,7 +552,7 @@ async function release(key) {
     <img class="cover" src="${esc(ipfs(r.img))}" alt="">
     <div>
       <div class="eyebrow">Release</div><h1>${esc(r.title)}</h1>
-      <div style="margin-bottom:12px"><a href="#/artist/${enc(r.artist)}"><b>${esc(r.artist)}</b></a> <span class="muted">${r.released ? `· released ${esc(r.released)} ` : ""}· ${plural(r.tracks.length, "song")} · ${relCollected(r).toLocaleString()} minted</span></div>
+      <div style="margin-bottom:12px"><a href="#/artist/${enc(r.artist)}"><b>${esc(r.artist)}</b></a> <span class="muted">${r.released ? `· released ${esc(relDate(r.released))} ` : ""}· ${plural(r.tracks.length, "song")} · ${relCollected(r).toLocaleString()} minted</span></div>
       <div>${[d.genre, d.mood, d.language].filter(Boolean).map(x => `<span class="pill">${esc(String(x).replace(/\|/g, " · "))}</span>`).join("")}
         <span class="pill hot">${edition(t0)}</span>${price ? `<span class="pill">${price}</span>` : ""}${d.explicit === true || d.explicit === 1 || d.explicit === "true" ? `<span class="pill">Explicit</span>` : ""}</div>
       <div class="actions">
@@ -608,6 +658,7 @@ async function passportPage(id) {
         <div class="pf"><div class="k">Edition</div><div class="v">${edition(t)}</div></div>
         <div class="pf"><div class="k">Copies</div><div class="v" id="pf-live">${plural(t.issued, "copy", "copies")} minted</div></div>
         <div class="pf"><div class="k">Issued</div><div class="v">${date(t.created)}</div></div>
+        ${VR.byId.has(t.id) ? `<div class="pf"><div class="k">Vibrr Radio</div><div class="v">${plural(VR.byId.get(t.id).plays, "play")} · ${plural(VR.byId.get(t.id).reacts, "reaction")}</div></div>` : ""}
       </div>
       <div class="actions" data-list="pass">
         <button class="btn big" data-play="0">&#9654; Play</button>
@@ -637,9 +688,10 @@ async function passportPage(id) {
       ${perms.length ? `<div class="perms">${perms.map(([n, k, s]) => `<div class="perm ${yes(d[k]) ? "y" : "n"}"><span class="i">${yes(d[k]) ? "✓" : "✕"}</span><span><b>${n}</b><small>${s} · ${yes(d[k]) ? "allowed" : "ask the owner first"}</small></span></div>`).join("")}</div>` : `<p class="muted">The artist hasn't set permissions yet.</p>`}
     </div>
     <div class="panel"><h2>Identifiers</h2><div class="kv">
-      ${kv("ISRC", d.isrc, 1)}${kv("UPC", d.upc, 1)}${kv("Template", t.id, 1)}${kv("Collection", t.collection, 1)}${kv("Schema", SCHEMA)}
+      ${kv("ISRC", d.isrc, 1)}${kv("UPC", d.upc, 1)}${kv("Template", t.id, 1)}${kv("Collection", t.collection, 1)}${kv("Schema", t.schema)}
       ${kv("Genre", d.genre && String(d.genre).replace(/\|/g, " · "))}${kv("Mood", d.mood && String(d.mood).replace(/\|/g, " · "))}${kv("BPM", d.bpm)}${kv("Key", d.key)}${kv("Language", d.language)}${kv("Format", d.format)}
-      ${cidLink("Audio", d.audio)}${cidLink("Artwork", d.img)}${cidLink("Video", d.video)}
+      ${kv("Track", d.track)}${kv("Released", d.released && relDate(d.released))}
+      ${cidLink("Audio (master)", d.audio)}${cidLink("Listening copy", d.listen)}${cidLink("Artwork", d.img)}${cidLink("Video", d.video)}
       <div class="k">Raw record</div><div class="v"><a class="mono" target="_blank" rel="noopener" href="${API}/templates/${enc(t.collection)}/${enc(t.id)}">template ${esc(t.id)} ↗</a></div>
     </div></div>
     <div class="panel wide"><h2>Collectors</h2><div id="collectors"><span class="muted">Checking the chain…</span></div></div>
@@ -767,7 +819,7 @@ function playlistPage(id, editNow) {
     ${tracks.length ? `${listHead()}<div class="tracks" data-list="pl" id="pl-tracks">${tracks.map((t, i) => trackRow(t, i, { thumb: 1, artist: 1, release: 1, drag: !p.liked, remove: 1 })).join("")}</div>
       ${p.liked ? "" : `<p class="muted small">Drag songs to reorder.</p>`}`
       : `<div class="empty-state"><b>${p.liked ? "Songs you like will appear here" : "Let's find something for your playlist"}</b>Tap ♥ or + on any song${p.liked ? "" : ", or add from the suggestions below"}.</div>`}
-    ${!p.liked && tracks.length ? `<div class="note">Share this playlist with <b>Share &amp; earn</b>. In the playlisting economy, when someone collects a song through your link, 20% of that collect flows back down the chain to you and everyone who passed it on. <a href="#/economy" style="color:var(--accent)">How it works</a></div>` : ""}
+    ${!p.liked && tracks.length ? `<div class="note">Share this playlist with <b>Share &amp; earn</b>. In the playlisting economy, when someone collects a song through your link, a share of that collect (artists opt in and choose it) flows back down the chain to you and everyone who passed it on. Coming with Vibrr's curator share. <a href="#/economy" style="color:var(--accent)">How it works</a></div>` : ""}
     ${recs.length ? `<div class="row-head"><h2>Recommended</h2><span class="muted small">Based on what's in this playlist</span></div>
       <div class="tracks" data-list="recs">${recs.map((t, i) => trackRow(t, i, { thumb: 1, artist: 1, release: 1, extra: `<button class="btn ghost sm" data-addto="${esc(p.id)}" data-tid="${esc(t.id)}">Add</button>` })).join("")}</div>` : ""}`;
   if (tracks.length) { $("#pl-play").onclick = () => playQueue(tracks); $("#pl-shuf").onclick = () => playQueue(shuffled(tracks)); }
@@ -826,7 +878,7 @@ function sharePlaylist(p) {
   if (m && p.curator && p.curator !== m && !via.includes(m)) via.push(m);
   via = via.slice(-PIPE.hops);
   const url = `${location.origin}${location.pathname}#/p/${b64e(JSON.stringify({ n: p.name, d: p.desc || "", i: p.ids, c: curator, v: via }))}`;
-  shareModal(`${p.name}: a playlist on Splendor Music`, url, m ? `This link carries the chain: curated by <b>${esc(curator)}</b>${via.length ? `, passed on by ${via.map(esc).join(" → ")}` : ""}. When someone collects a song through it, the pipeline gets its 20%.`
+  shareModal(`${p.name}: a playlist on Splendor Music`, url, m ? `This link carries the chain: curated by <b>${esc(curator)}</b>${via.length ? `, passed on by ${via.map(esc).join(" → ")}` : ""}. Once Vibrr's curator share is live, collects through it pay the pipeline the share each artist has chosen.`
     : `Sign in with WebAuth before sharing so the pipeline can credit you.`);
 }
 function sharedView(raw) {
@@ -840,7 +892,7 @@ function sharedView(raw) {
       <div class="muted small">${curator ? `Curated by ${acctLink(curator)}` : "Shared with you"}${via.length ? ` · passed on by ${via.map(v => acctLink(v)).join(" → ")}` : ""} · ${plural(tracks.length, "song")}</div>
       <div class="actions"><button class="btn big" id="sh-play">&#9654; Play</button><button class="btn ghost" id="sh-shuf">&#8644; Shuffle</button><button class="btn ghost" id="sh-save">+ Save to my library</button><button class="btn ghost" id="sh-pass">Pass it on</button></div></div></section>
     ${listHead()}<div class="tracks" data-list="shared">${tracks.map((t, i) => trackRow(t, i, { thumb: 1, artist: 1, release: 1 })).join("")}</div>
-    ${curator ? `<div class="note">Collect a song from this playlist and <b>80%</b> goes to the artist's Passport split, while <b>20%</b> flows back down the chain to ${esc(curator)}${via.length ? ` and ${via.map(esc).join(", ")}` : ""}, the people who got this music to you. <a href="#/economy" style="color:var(--accent)">The playlisting economy</a></div>` : ""}`;
+    ${curator ? `<div class="note">Coming soon: when the artist opts in, collecting a song from this playlist sends a share they choose (say <b>20%</b>) back down the chain to ${esc(curator)}${via.length ? ` and ${via.map(esc).join(", ")}` : ""}, the people who got this music to you. The rest goes to the artist's Passport split. Today, 100% follows the artist's split. <a href="#/economy" style="color:var(--accent)">The playlisting economy</a></div>` : ""}`;
   $("#sh-play").onclick = () => playQueue(tracks); $("#sh-shuf").onclick = () => playQueue(shuffled(tracks));
   $("#sh-save").onclick = () => { const pl = PL.create(name, tracks.map(t => t.id), { desc, curator: curator || undefined, via }); toast(`Saved “${pl.name}” to your library`); location.hash = "#/pl/" + pl.id; };
   $("#sh-pass").onclick = () => sharePlaylist({ name, desc, ids: tracks.map(t => t.id), curator, via });
@@ -1075,7 +1127,7 @@ async function economy() {
   view().innerHTML = `
   <section class="manifesto"><div class="eyebrow">Splendor Music</div><h1>Welcome to the playlisting economy.</h1>
     <p>Mint on Vibrr. Listen and share on Splendor Music. We're in the age of turning our social, digital interactions into ways to hold each other up, while AI helps all of us expand what we're aware of. Playlists are word of mouth. Here, word of mouth pays.</p>
-    <p class="muted" style="font-size:15px">Artists keep 80% through their Music Passport split. The other 20% flows back down the pipeline to the people who helped the song get there: the curator who made the playlist, and every person who passed it on. Share for share, like Facebook back in 2019, except this time the people sharing get paid too.</p></section>
+    <p class="muted" style="font-size:15px">Artists opt in and choose the share. Say they keep 80% through their Music Passport split: the other 20% flows back down the pipeline to the people who helped the song get there: the curator who made the playlist, and every person who passed it on. Share for share, like Facebook back in 2019, except this time the people sharing get paid too.</p></section>
   <div class="steps">
     <div class="step"><span class="k">01</span><b>Artists mint</b><p>Release on Vibrr with a Music Passport: credits, copyright, permissions, and a payment split enforced on chain.</p></div>
     <div class="step"><span class="k">02</span><b>Listeners curate</b><p>Collect what you love, build playlists, and decorate your Corner with your music, gigs and art.</p></div>
@@ -1097,7 +1149,7 @@ async function economy() {
   <div class="pgrid">
     <div class="panel"><h2>The rules (proposed)</h2><ol class="rules">
       <li>Collect straight from the artist, no playlist: <b>100%</b> goes to the artist's Passport split.</li>
-      <li>Collect through a shared playlist: <b>80%</b> to the artist's split, <b>20%</b> to the pipeline.</li>
+      <li>The artist opts in and sets the pipeline share. Example: <b>80%</b> to the artist's split, <b>20%</b> to the pipeline.</li>
       <li>The curator who made the playlist takes half the pipeline, or all of it if they shared it straight to the buyer.</li>
       <li>The other half goes to the share chain: whoever shared it to the buyer gets the biggest slice, halving back up the chain.</li>
       <li>Fair play: up to ${PIPE.hops} people per chain, each account once, and nobody earns from their own collect (that slice returns to the artist).</li>
@@ -1105,7 +1157,7 @@ async function economy() {
     <div class="panel"><h2>A discovery engine for artists</h2>
       <p>Playlists become the map of how music travels. Artists see which curators and which shares brought them new collectors, and can follow and reward them. Curators build a public record of the artists they found early. Listeners find new music through people they trust, not an algorithm.</p>
       <h3 style="margin-top:16px">Why this can run on XPR today</h3>
-      <p class="muted">Vibrr's split contract already pays several wallets in one transaction when a song is collected. Adding the pipeline means one more field in the collect memo, e.g. <span class="mono">mint,130261,via:curator&gt;sharer1&gt;sharer2</span>, plus an audited contract update by the Vibrr team.</p>
+      <p class="muted">Vibrr's split contract already pays several wallets in one transaction when a song is collected. Adding the pipeline means one more field in the collect memo (our sketch: <span class="mono">mint,130261,via:curator&gt;sharer1&gt;sharer2</span>; Vibrr will set the real format), plus an audited contract update. Vibrr is scoping it now, with artists opting in and setting their own share. Until then every collect uses the plain <span class="mono">mint,&lt;song&gt;</span> memo.</p>
       ${proof ? `<div class="proof"><img src="${esc(ipfs(proof.t.img))}" alt="" style="width:56px;height:56px;border-radius:8px;object-fit:cover"><div>Proof the rails work: on ${date(proof.time)}, ${acctLink(proof.buyer)} collected <a href="#/passport/${enc(proof.t.id)}"><b>${esc(proof.t.title)}</b></a> for ${num(proof.paid.n)} ${esc(proof.paid.sym)}, and the contract made <b>${proof.outs.length} payouts</b> in that same transaction. <a target="_blank" rel="noopener" href="${EXPLORER}/transaction/${enc(proof.trx)}" style="color:var(--accent)">See it on chain ↗</a></div></div>` : ""}
     </div>
   </div>

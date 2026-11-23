@@ -93,7 +93,7 @@ async function collect(id, again) {
     <div class="m-body">
       <div class="psong"><img src="${esc(ipfs(t.img))}" alt=""><div class="m"><b>${esc(t.title)}</b><span class="muted small">A fresh copy is minted straight to your account</span></div><b class="mono">${esc(ci.qty)}</b></div>
       <div class="sub-h" style="margin:4px 0 0">Where your ${esc(ci.label)} goes</div>${legRows(ps.legs, ci.price, ci.sym)}
-      <div class="muted small">You'll approve the exact transfer in WebAuth: ${esc(ci.qty)} to <span class="mono">${SPLITTER}</span> with memo <span class="mono">mint,${esc(t.id)}</span>. Splendor Music never holds your money. The 20% playlist pipeline needs Vibrr's contract update, so for now 100% follows the split above.</div>
+      <div class="muted small">You'll approve the exact transfer in WebAuth: ${esc(ci.qty)} to <span class="mono">${SPLITTER}</span> with memo <span class="mono">mint,${esc(t.id)}</span>. Splendor Music never holds your money. Curator shares (artists opt in and set the share) are being scoped by Vibrr, so for now 100% follows the split above.</div>
       <div id="c-status" class="err"></div>
     </div>
     <div class="m-foot"><button class="btn ghost" data-mclose>Cancel</button><button class="btn" id="c-go">${verified() ? "Approve in WebAuth" : "Sign in with WebAuth to collect"}</button></div>`);
@@ -127,11 +127,14 @@ const offArt = id => new URL(`offline/art/${id}`, location.href).href;
 async function offlineInit() {
   try { const c = await caches.open(AUDIO_CACHE); (await c.keys()).forEach(r => { const m = new URL(r.url).pathname.match(/\/offline\/audio\/(\d+)$/); if (m) OFF.add(m[1]); }); } catch {}
 }
-async function fetchAudio(t) {
-  let last;
-  for (let g = 0; g < GATEWAYS.length; g++) {
-    try { const r = await fetch(ipfs(t.audio, g)); if (r.ok) return await r.blob(); last = new Error("gateway said " + r.status); } catch (e) { last = e; }
-  }
+// offline copies use Vibrr's listening copy when there is one (a few MB instead of a big WAV); downloads always get the master
+async function fetchAudio(t, master = false) {
+  let last; const tried = new Set();
+  for (const cid of master || !t.listen ? [t.audio] : [t.listen, t.audio])
+    for (let g = 0; g < GATEWAYS.length; g++) {
+      const u = ipfs(cid, g); if (!u || tried.has(u)) continue; tried.add(u);
+      try { const r = await fetch(u); if (r.ok) { const b = await r.blob(); b.isListen = cid === t.listen && cid !== t.audio; return b; } last = new Error("gateway said " + r.status); } catch (e) { last = e; }
+    }
   throw last || new Error("file not found");
 }
 function refreshOff() {
@@ -151,7 +154,8 @@ async function toggleOffline(id) {
   DL.add(t.id); refreshOff(); toast(BATCH ? `Saving ${BATCH}: “${t.title}”…` : `Saving “${t.title}” to this device…`);
   try {
     const blob = await fetchAudio(t);
-    await c.put(offKey(t.id), new Response(blob, { headers: { "Content-Type": blob.type || "audio/wav" } }));
+    const type = /^audio\//.test(blob.type) ? blob.type : blob.isListen ? "audio/mp4" : "audio/wav";   // gateways sometimes say octet-stream
+    await c.put(offKey(t.id), new Response(blob, { headers: { "Content-Type": type } }));
     try { for (let g = 0; g < GATEWAYS.length; g++) { const r = await fetch(ipfs(t.img, g)); if (r.ok) { await c.put(offArt(t.id), r); break; } } } catch {}
     OFF.add(t.id); navigator.storage?.persist?.().catch(() => {});
     if (!BATCH) toast(`“${t.title}” is on this device (${(blob.size / 1e6).toFixed(0)} MB). It plays offline.`);
@@ -181,9 +185,11 @@ async function downloadFile(id) {
   if (!OWN.has(t.id)) { toast("Collect this song to download it"); return; }
   toast(`Preparing “${t.title}”…`);
   try {
+    // the offline copy may be the smaller listening copy: only reuse it when it IS the master format
     const r = await (await caches.open(AUDIO_CACHE)).match(offKey(t.id));
-    const blob = r ? await r.blob() : await fetchAudio(t);
-    const ext = /mpeg|mp3/.test(blob.type) ? "mp3" : /flac/.test(blob.type) ? "flac" : "wav";
+    const cached = r ? await r.blob() : null;
+    const blob = cached && /wav|wave|flac|aiff|mpeg|mp3/.test(cached.type) ? cached : await fetchAudio(t, true);
+    const ext = /mpeg|mp3/.test(blob.type) ? "mp3" : /flac/.test(blob.type) ? "flac" : /aiff/.test(blob.type) ? "aiff" : /mp4|m4a|aac/.test(blob.type) ? "m4a" : "wav";
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
     a.download = `${t.artist} - ${t.title}.${ext}`.replace(/[\/\\:*?"<>|]+/g, " ");
     document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
