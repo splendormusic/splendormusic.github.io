@@ -1,0 +1,16 @@
+{
+  "name": "Splendor Music",
+  "short_name": "Splendor",
+  "description": "Listen, collect and share music NFTs on the XPR Network. Mint on Vibrr, listen and share on Splendor Music.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#060607",
+  "theme_color": "#060607",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

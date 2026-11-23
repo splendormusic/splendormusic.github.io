@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Splendor Music</title>
+<meta name="description" content="Listen, collect and share music NFTs on the XPR Network. Mint on Vibrr, listen and share on Splendor Music.">
+<meta name="theme-color" content="#060607">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/favicon.png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Splendor">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=0.4">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="#/"><img class="s-mark" src="icons/s-mark.png" alt=""><span class="wordmark">Splendor <small>Music</small></span></a>
+  <nav>
+    <a href="#/" data-nav="home">Discover</a>
+    <a href="#/radio" data-nav="radio">Radio</a>
+    <a href="#/artists" data-nav="artists">Artists</a>
+    <a href="#/library" data-nav="library">Library</a>
+    <a href="#/economy" data-nav="economy">Economy</a>
+  </nav>
+  <input id="search" type="search" placeholder="Search songs, releases, artists" autocomplete="off">
+  <button id="install-btn" class="btn sm" hidden title="Install Splendor Music as an app">Install app</button>
+  <button id="me-btn" class="me-chip empty" title="Your XPR account">Sign in</button>
+</header>
+
+<main id="view"><div class="loading">Reading music from the XPR Network…</div></main>
+
+<footer class="player" id="player">
+  <img id="p-art" alt="">
+  <div class="p-meta"><a id="p-title" href="#/">Nothing playing</a><div id="p-artist" class="muted">Pick a release or a radio station</div></div>
+  <div class="p-side">
+    <button id="p-like" class="ic like" title="Like">&#9829;</button>
+    <button id="p-save" class="ic" title="Save to playlist">+</button>
+    <a id="p-pass" class="ic pass" href="#/" title="Music Passport">Passport</a>
+    <button id="p-collect" class="btn sm" hidden>Collect</button>
+  </div>
+  <div class="p-ctrl">
+    <button id="p-prev" title="Previous">&#9198;</button>
+    <button id="p-play" class="big" title="Play">&#9654;</button>
+    <button id="p-next" title="Next">&#9197;</button>
+  </div>
+  <div class="p-bar"><span id="p-cur">0:00</span><input id="p-seek" type="range" min="0" max="1000" value="0"><span id="p-dur">0:00</span></div>
+  <input id="p-vol" type="range" min="0" max="100" value="85" title="Volume">
+  <audio id="audio" preload="none"></audio>
+</footer>
+
+<script src="app.js?v=0.4"></script>
+<script src="wallet.js?v=0.4"></script>
+<script src="radio.js?v=0.4"></script>
+</body>
+</html>
