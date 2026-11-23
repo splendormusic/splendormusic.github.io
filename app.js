@@ -94,6 +94,10 @@ async function load() {
   for (const r of relByKey.values()) {   // collapse exact duplicate tracks inside a release (same title + same audio)
     r.raw = r.tracks.length;
     const seen = new Set(); r.tracks = r.tracks.filter(t => { const k = t.title.toLowerCase() + t.audio; if (seen.has(k)) return false; seen.add(k); return true; });
+    // Vibrr's schema has a 'track' field: when artists fill it, play in that order (otherwise mint order)
+    const tn = t => { const n = parseInt(String(t.d.track ?? "").replace(/[^0-9]/g, ""), 10); return n > 0 ? n : 1e9; };
+    if (r.tracks.some(t => tn(t) < 1e9)) r.tracks.sort((x, y) => tn(x) - tn(y) || x.created - y.created);
+    const rel = r.tracks.map(t => String(t.d.released || "").trim()).find(Boolean); if (rel) r.released = rel;
   }
   // tidy: the same recordings minted again by the same artist in another collection (matching ISRCs) show as ONE release.
   // Keep the cleaner mint (fewer duplicate templates), then the newer one. The other stays reachable from the Passport.
@@ -497,7 +501,7 @@ async function release(key) {
     <img class="cover" src="${esc(ipfs(r.img))}" alt="">
     <div>
       <div class="eyebrow">Release</div><h1>${esc(r.title)}</h1>
-      <div style="margin-bottom:12px"><a href="#/artist/${enc(r.artist)}"><b>${esc(r.artist)}</b></a> <span class="muted">· ${plural(r.tracks.length, "song")} · ${relCollected(r).toLocaleString()} minted</span></div>
+      <div style="margin-bottom:12px"><a href="#/artist/${enc(r.artist)}"><b>${esc(r.artist)}</b></a> <span class="muted">${r.released ? `· released ${esc(r.released)} ` : ""}· ${plural(r.tracks.length, "song")} · ${relCollected(r).toLocaleString()} minted</span></div>
       <div>${[d.genre, d.mood, d.language].filter(Boolean).map(x => `<span class="pill">${esc(String(x).replace(/\|/g, " · "))}</span>`).join("")}
         <span class="pill hot">${edition(t0)}</span>${price ? `<span class="pill">${price}</span>` : ""}${d.explicit === true || d.explicit === 1 || d.explicit === "true" ? `<span class="pill">Explicit</span>` : ""}</div>
       <div class="actions">
