@@ -1,4 +1,4 @@
-/* Splendor Music: prototype v0.4.4 (24 Nov 2026: Vibrr listening copies, real album names, live Vibrr Radio station)
+/* Splendor Music: prototype v0.4.5 (24 Nov 2026: Vibrr listening copies, real album names, live Vibrr Radio station)
    Concept + product design: Lachlan Grant Splendor (Vibrr Music / Music Passport; X post 15 Sep 2026; the
    playlisting economy). "Mint on Vibrr. Listen, share and earn on Splendor Music."
    Data: public XPR Network chain data only: AtomicAssets (Vibrr's music schema "cxcmus"), Vibrr's split contract
@@ -143,11 +143,23 @@ async function load() {
     const rel = r.tracks.map(t => String(t.d.released || "").trim() || VR.byId.get(t.id)?.released || "").find(Boolean); if (rel) r.released = rel;
     // older songs can't be changed on chain: Vibrr Radio returns their real album name, so use it when the feed agrees
     const al = [...new Set(r.tracks.map(t => VR.byId.get(t.id)?.album).filter(albumOk))];
-    if (al.length === 1 && al[0] !== r.title) { r.title = al[0]; r.tracks.forEach(t => t.release = al[0]); }
+    if (al.length === 1 && al[0] !== r.title) { r.title = al[0]; r.tracks.forEach(t => t.release = al[0]); r.renamed = true; }
+  }
+  // a renamed release can now share its title with a sibling in the same collection: merge them into ONE release
+  // (the old key keeps working: it points at the merged release)
+  const byTitle = new Map();
+  for (const [k, r] of [...relByKey]) {
+    const tk = r.collection + "~" + r.title.toLowerCase(), keep = byTitle.get(tk);
+    if (!keep) { byTitle.set(tk, r); continue; }
+    if (keep === r) continue;
+    r.tracks.forEach(t => { t.key = keep.key; t.release = keep.title; keep.tracks.push(t); });
+    keep.tracks.sort((x, y) => x.created - y.created);
+    keep.created = Math.max(keep.created, r.created); keep.raw += r.raw; keep.released ||= r.released;
+    relByKey.set(k, keep);
   }
   // tidy: the same recordings minted again by the same artist in another collection (matching ISRCs) show as ONE release.
   // Keep the cleaner mint (fewer duplicate templates), then the newer one. The other stays reachable from the Passport.
-  const rels = [...relByKey.values()], isrcOf = r => new Set(r.tracks.map(t => String(t.d.isrc || "").trim().toUpperCase()).filter(Boolean));
+  const rels = [...new Set(relByKey.values())], isrcOf = r => new Set(r.tracks.map(t => String(t.d.isrc || "").trim().toUpperCase()).filter(Boolean));
   for (let i = 0; i < rels.length; i++) for (let j = i + 1; j < rels.length; j++) {
     const a = rels[i], b = rels[j];
     if (a.hidden || b.hidden || a.artist.toLowerCase() !== b.artist.toLowerCase()) continue;
@@ -157,8 +169,8 @@ async function load() {
     const [keep, drop] = da !== db ? (da < db ? [a, b] : [b, a]) : (a.created >= b.created ? [a, b] : [b, a]);
     drop.hidden = true; drop.dupOf = keep.key;
   }
-  for (const r of relByKey.values()) if (r.hidden) r.tracks.forEach(t => t.hidden = true);
-  RELEASES = [...relByKey.values()].filter(r => !r.hidden).sort((a, b) => b.created - a.created);
+  for (const r of rels) if (r.hidden) r.tracks.forEach(t => t.hidden = true);
+  RELEASES = rels.filter(r => !r.hidden).sort((a, b) => b.created - a.created);
   TRACKS = RELEASES.flatMap(r => r.tracks);              // every playable song once (all templates stay in byId for Passports)
   const am = new Map();
   for (const r of RELEASES) {
