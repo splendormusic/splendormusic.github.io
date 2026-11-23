@@ -51,6 +51,7 @@ const isAcct = x => /^[a-z1-5.]{1,12}$/.test(String(x || ""));
 const b64e = s => btoa(unescape(encodeURIComponent(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const b64d = s => decodeURIComponent(escape(atob(String(s).replace(/-/g, "+").replace(/_/g, "/"))));
 const me = () => store.get("me", "") || "";
+const vibrrUrl = t => `https://vibrr.ai/vibrr-market/template/${enc(t.collection)}/${enc(t.id)}`;   // each song's own page on Vibrr
 const edition = t => t.max === 0 ? "Open edition" : t.max === 1 ? "1/1" : `Edition of ${t.max}`;
 const relCollected = r => r.tracks.reduce((n, t) => n + (t.issued || 0), 0);
 const songCount = a => a.releases.reduce((n, r) => n + r.tracks.length, 0);
@@ -509,7 +510,7 @@ async function release(key) {
         <button class="btn ghost" id="shuf-rel">&#8644; Shuffle</button>
         <button class="btn ghost" data-save="${esc(r.tracks.map(t => t.id).join(","))}" data-label="${esc(`${r.title} · ${plural(r.tracks.length, "song")}`)}">+ Save to playlist</button>
         <button class="btn ghost" id="share">Share</button>
-        <a class="btn ghost" href="https://vibrr.ai/radio" target="_blank" rel="noopener">Collect on Vibrr ↗</a>
+        <a class="btn ghost" href="https://vibrr.ai/vibrr-market/collection/${enc(r.collection)}" target="_blank" rel="noopener">Collect on Vibrr ↗</a>
       </div>
       ${listHead("Edition")}<div class="tracks" data-list="rel">${r.tracks.map((t, i) => trackRow(t, i, { meta: x => `${edition(x)} · ${x.issued} minted` })).join("")}</div>
       <h3 style="margin-top:26px">Supported by</h3><div class="supporters" id="sup"><span class="muted">Checking the chain…</span></div>
@@ -613,7 +614,7 @@ async function passportPage(id) {
         <button class="ic like${isLiked(t.id) ? " on" : ""}" data-like="${esc(t.id)}" title="Like" style="font-size:22px">&#9829;</button>
         <button class="btn ghost" data-save="${esc(t.id)}">+ Save to playlist</button>
         <button class="btn ghost" id="share-pass">Share Passport</button>
-        <span id="own-actions" class="actions" style="margin:0"><a class="btn ghost" href="https://vibrr.ai/radio" target="_blank" rel="noopener">Collect on Vibrr ↗</a></span>
+        <span id="own-actions" class="actions" style="margin:0"><a class="btn ghost" href="${vibrrUrl(t)}" target="_blank" rel="noopener">Collect on Vibrr ↗</a></span>
       </div>
     </div>
     <div class="stamp">VERIFIED<br>ON CHAIN<span>#${esc(t.id)}</span></div>

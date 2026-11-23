@@ -83,7 +83,7 @@ function renderOwnActions(t) {
   el.innerHTML = ci.owned
     ? `<span class="pill ok">✓ You own #${esc(MINTS.get(t.id))}</span><button class="btn ghost" data-offline="${esc(t.id)}">${OFF.has(t.id) ? "✓ Saved offline" : "⤓ Save offline"}</button><button class="btn ghost" data-dl="${esc(t.id)}">Download file</button>${more.ok ? `<button class="btn ghost" data-collect="${esc(t.id)}" data-again="1">Collect another copy · ${esc(more.label)}</button>` : ""}`
     : ci.ok ? `<button class="btn" data-collect="${esc(t.id)}">Collect · ${esc(ci.label)}</button>`
-    : `<a class="btn ghost" href="https://vibrr.ai/radio" target="_blank" rel="noopener" title="${esc(ci.why)}">Collect on Vibrr ↗</a>`;
+    : `<a class="btn ghost" href="${vibrrUrl(t)}" target="_blank" rel="noopener" title="${esc(ci.why)}">Collect on Vibrr ↗</a>`;
 }
 async function collect(id, again) {
   const t = byId.get(String(id)); if (!t) return;
