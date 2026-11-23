@@ -713,16 +713,37 @@ function library() {
 }
 /* installable app (PWA): Chrome/Android offer an install prompt; iPhone = Share → Add to Home Screen */
 let INSTALL = null;
-function getApp() {
-  if (INSTALL) { INSTALL.prompt(); INSTALL.userChoice.finally(() => { INSTALL = null; $("#install-btn").hidden = true; }); return; }
-  const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
-  modal(`<div class="m-head"><div><h3>${standalone ? "You're in the app ✓" : "Get the Splendor Music app"}</h3><div class="muted small">No app store needed: it installs straight from the website.</div></div><button class="x" data-mclose>&times;</button></div>
+const isStandalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+function platform() {
+  const ua = navigator.userAgent, ios = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  if (ios) return /CriOS|FxiOS|EdgiOS/.test(ua) ? "ios-other" : "ios-safari";
+  return /Android/.test(ua) ? "android" : "desktop";
+}
+/* "Get the app": one tap where the browser allows it, otherwise big, plain steps for this exact phone */
+function getApp(reason = "") {
+  if (INSTALL) { INSTALL.prompt(); INSTALL.userChoice.finally(() => { INSTALL = null; $("#install-btn").hidden = true; hideAppBanner(); }); return; }
+  const pf = platform();
+  if (isStandalone()) { toast("You're already in the app ✓"); return; }
+  const steps = {
+    "ios-safari": [["⬆︎", "Tap Share", "The square with an arrow. On newer iPhones it's inside the ••• button at the bottom right."], ["＋", "Tap “Add to Home Screen”", "Scroll down the list if you can't see it."], ["✓", "Tap “Add”", "Splendor Music is now on your home screen, like any app."]],
+    "ios-other": [["⬆︎", "Tap Share", "Top right, next to the address bar."], ["＋", "Tap “Add to Home Screen”", ""], ["✓", "Tap “Add”", "Splendor Music is now on your home screen."]],
+    android: [["⋮", "Tap the menu", "Top right of Chrome."], ["＋", "Tap “Install app”", "Or “Add to Home screen”."], ["✓", "Tap “Install”", "Splendor Music is now with your other apps."]],
+    desktop: [["⤓", "Click the install icon", "At the right end of Chrome's address bar."], ["✓", "Click “Install”", "Splendor Music opens in its own window."]]
+  }[pf];
+  modal(`<div class="m-head"><div><h3>Get the Splendor Music app</h3><div class="muted small">${esc(reason || "Free, no app store, 10 seconds.")}</div></div><button class="x" data-mclose>&times;</button></div>
     <div class="m-body">
-      <div class="perm y"><span class="i">1</span><span><b>iPhone / iPad</b><small>Open Splendor Music in Safari → tap Share → Add to Home Screen.</small></span></div>
-      <div class="perm y"><span class="i">2</span><span><b>Android</b><small>Open it in Chrome → menu ⋮ → Install app.</small></span></div>
-      <div class="perm y"><span class="i">3</span><span><b>Mac / PC</b><small>In Chrome, click the install icon at the right of the address bar.</small></span></div>
-      <p class="muted small" style="margin:0">Why not the App Store yet? Apple and Google take up to 30% of digital sales made inside store apps. Installing from the web keeps the artist's 80% whole, and WebAuth handles collecting in one tap. A store app can come later for reach.</p>
-    </div><div class="m-foot"><button class="btn" data-mclose>Got it</button></div>`);
+      <div class="steps-big">${steps.map(([i, t, s], n) => `<div class="sb"><span class="sb-i">${i}</span><span><b>${n + 1}. ${t}</b>${s ? `<small>${s}</small>` : ""}</span></div>`).join("")}</div>
+      <p class="muted small" style="margin:0">Why install? It opens full screen like a normal app, the music you own plays offline, and your phone won't clear your offline songs. No app store means the artist keeps their full share.</p>
+    </div><div class="m-foot"><button class="btn ghost" data-mclose id="app-later">Not now</button><button class="btn" data-mclose>Done</button></div>`, "sheet");
+  store.set("appNag", Date.now());
+}
+function hideAppBanner() { $(".app-banner")?.remove(); }
+function appBanner() {
+  if (EMBED || isStandalone() || platform() === "desktop" || $(".app-banner")) return;
+  if (Date.now() - (store.get("appNag", 0) || 0) < 3 * 864e5) return;      // at most every 3 days
+  document.body.insertAdjacentHTML("beforeend", `<div class="app-banner"><img src="icons/icon-192.png" alt=""><div><b>Splendor Music app</b><small>Free · offline music · 2 taps</small></div><button class="btn sm" id="ab-get">Get it</button><button class="x" id="ab-x" title="Not now">&times;</button></div>`);
+  $("#ab-get").onclick = () => { hideAppBanner(); getApp(); };
+  $("#ab-x").onclick = () => { store.set("appNag", Date.now()); hideAppBanner(); };
 }
 
 function playlistPage(id, editNow) {
@@ -1216,7 +1237,7 @@ function route(keep) {
   // the installable app: offline-capable shell + install prompt
   if ("serviceWorker" in navigator && !EMBED) navigator.serviceWorker.register("sw.js").then(reg => { reg.waiting?.postMessage("skipWaiting"); reg.addEventListener("updatefound", () => { const n = reg.installing; n?.addEventListener("statechange", () => { if (n.state === "installed") n.postMessage("skipWaiting"); }); }); }).catch(() => {});
   window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); INSTALL = e; $("#install-btn").hidden = false; });
-  $("#install-btn").onclick = getApp;
+  $("#install-btn").onclick = () => getApp();
   if (EMBED) {   // embedded player on someone else's website
     document.body.classList.add("embed");
     document.body.insertAdjacentHTML("beforeend", `<a class="embed-brand" target="_blank" rel="noopener" href="${esc(location.pathname + location.hash)}"><img class="s-mark" src="icons/s-mark.png" alt=""><b>Splendor</b>&nbsp;Music ↗</a>`);
@@ -1226,5 +1247,6 @@ function route(keep) {
   window.addEventListener("hashchange", () => route());
   route();
   if (typeof loadOwned === "function" && me()) loadOwned();
+  setTimeout(appBanner, 4000);
   if (store.get("wa", false) && typeof waConnect === "function") waConnect(true).then(() => renderMe()).catch(() => {});
 })();

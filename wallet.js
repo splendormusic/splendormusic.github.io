@@ -55,6 +55,7 @@ async function loadOwned(rerender) {
   } catch {}
   if (rerender || [...OWN].sort().join() !== before) { if (!$(".modal-bg") && !document.activeElement?.matches("input,textarea,select")) route(true); }
   if (P.cur()) updateCollectBtn(P.cur());
+  if (store.get("autoOffline", false) && OWN.size) saveAllOffline([...OWN], true);
 }
 
 /* ---------- collecting ---------- */
@@ -109,8 +110,9 @@ async function collect(id, again) {
       const trx = r?.processed?.id || r?.transaction_id || r?.payload?.tx || "";
       t.issued++;
       $(".modal", m).innerHTML = `<div class="m-head"><div><h3>It's yours ✓</h3><div class="muted small">“${esc(t.title)}” is in your collection. The artist was paid in the same transaction.</div></div><button class="x" data-mclose>&times;</button></div>
-        <div class="m-body"><p style="margin:0">You can now save it offline and download the file any time, on any device you sign in on.</p>${trx ? `<a class="pill" target="_blank" rel="noopener" href="${EXPLORER}/transaction/${enc(trx)}">See the transaction ↗</a>` : ""}</div>
-        <div class="m-foot"><button class="btn" data-mclose>Done</button></div>`;
+        <div class="m-body"><p style="margin:0">Keep it on this ${platform() === "desktop" ? "computer" : "phone"} so it plays anywhere, even with no signal. You can download the file any time, on any device you sign in on.</p>${trx ? `<a class="pill" target="_blank" rel="noopener" href="${EXPLORER}/transaction/${enc(trx)}">See the transaction ↗</a>` : ""}</div>
+        <div class="m-foot"><button class="btn ghost" data-mclose>Later</button><button class="btn" id="c-keep">⤓ Keep it on this ${platform() === "desktop" ? "computer" : "phone"}</button></div>`;
+      $("#c-keep", m).onclick = () => { OWN.add(t.id); closeModal(); toggleOffline(t.id).then(() => { if (!isStandalone() && platform() !== "desktop") getApp("Your music is saved. Add the app to your home screen so it's one tap away and your phone never clears it."); }); };
       MODAL_DIRTY = true; setTimeout(() => loadOwned(true), 2500);
     } catch (e) {
       go.disabled = false; go.textContent = verified() ? "Try again" : "Sign in with WebAuth to collect";
@@ -146,17 +148,30 @@ async function toggleOffline(id) {
   if (!OWN.has(t.id)) { toast("Collect this song to keep it offline"); return; }
   const c = await caches.open(AUDIO_CACHE);
   if (OFF.has(t.id)) { await c.delete(offKey(t.id)); await c.delete(offArt(t.id)); OFF.delete(t.id); refreshOff(); toast(`Removed “${t.title}” from this device`); return; }
-  DL.add(t.id); refreshOff(); toast(`Saving “${t.title}” to this device…`);
+  DL.add(t.id); refreshOff(); toast(BATCH ? `Saving ${BATCH}: “${t.title}”…` : `Saving “${t.title}” to this device…`);
   try {
     const blob = await fetchAudio(t);
     await c.put(offKey(t.id), new Response(blob, { headers: { "Content-Type": blob.type || "audio/wav" } }));
     try { for (let g = 0; g < GATEWAYS.length; g++) { const r = await fetch(ipfs(t.img, g)); if (r.ok) { await c.put(offArt(t.id), r); break; } } } catch {}
     OFF.add(t.id); navigator.storage?.persist?.().catch(() => {});
-    toast(`“${t.title}” is on this device (${(blob.size / 1e6).toFixed(0)} MB). It plays offline.`);
+    if (!BATCH) toast(`“${t.title}” is on this device (${(blob.size / 1e6).toFixed(0)} MB). It plays offline.`);
   } catch (e) { toast(`Couldn't save “${t.title}”: ${e.message}`); }
   DL.delete(t.id); refreshOff();
 }
-async function saveAllOffline(ids) { for (const id of ids) if (!OFF.has(id)) await toggleOffline(id); }
+async function saveAllOffline(ids, quiet) {
+  const todo = ids.filter(id => !OFF.has(id) && !DL.has(id)); if (!todo.length) { if (!quiet) toast("Everything you own is already on this device ✓"); return; }
+  for (let i = 0; i < todo.length; i++) { BATCH = `${i + 1} of ${todo.length}`; await toggleOffline(todo[i]); }
+  BATCH = ""; toast(`Done: ${plural(todo.length, "song")} saved to this device`); meter();
+}
+let BATCH = "";
+async function meter() {
+  const el = $("#store-meter"); if (!el) return;
+  try {
+    const e = await navigator.storage.estimate(), used = e.usage || 0, free = Math.max(0, (e.quota || 0) - used);
+    const gb = n => n > 1e9 ? (n / 1e9).toFixed(1) + " GB" : Math.round(n / 1e6) + " MB";
+    el.textContent = `On this device: ${plural(OFF.size, "song")} · using ${gb(used)} · ${gb(free)} free for more`;
+  } catch { el.textContent = `On this device: ${plural(OFF.size, "song")}`; }
+}
 async function offlineUrl(id) {
   if (!OFF.has(String(id))) return null;
   try { const r = await (await caches.open(AUDIO_CACHE)).match(offKey(id), { ignoreVary: true }); return r ? URL.createObjectURL(await r.blob()) : null; } catch { return null; }
@@ -179,13 +194,15 @@ async function downloadFile(id) {
 function libraryExtras() {
   const owned = [...OWN].map(id => byId.get(id)).filter(Boolean); LISTS.owned = owned;
   const offline = [...OFF].map(id => byId.get(id)).filter(Boolean); LISTS.offline = offline;
-  return `<div class="row-head"><h2>Your collection</h2>${owned.length ? `<span class="actions" style="margin:0"><button class="btn ghost sm" id="own-play">&#9654; Play</button><button class="btn ghost sm" id="own-save">⤓ Save all offline</button><a class="btn ghost sm" href="#/offline">On this device · <span id="off-count">${OFF.size}</span></a></span>` : ""}</div>
+  return `<div class="row-head"><h2>Your collection</h2>${owned.length ? `<span class="actions" style="margin:0"><button class="btn ghost sm" id="own-play">&#9654; Play</button><a class="btn ghost sm" href="#/offline">On this device · <span id="off-count">${OFF.size}</span></a></span>` : ""}</div>
+    ${owned.length ? `<label class="keep-switch"><input type="checkbox" id="own-keep"${store.get("autoOffline", false) ? " checked" : ""}><span class="sw-ui"></span><span><b>Keep my music on this device</b><small id="store-meter">Songs you own download here so they play with no signal.</small></span></label>` : ""}
     ${!me() ? `<p class="muted">Sign in with WebAuth to see the music you own.</p>` : owned.length ? `${listHead()}<div class="tracks" data-list="owned">${owned.map((t, i) => trackRow(t, i, { thumb: 1, artist: 1, release: 1 })).join("")}</div>`
       : `<p class="muted">${esc(me())} doesn't hold any music NFTs yet. Collect one from any Passport.</p>`}`;
 }
 function bindLibraryExtras() {
   if ($("#own-play")) $("#own-play").onclick = () => playQueue(LISTS.owned);
-  if ($("#own-save")) $("#own-save").onclick = () => saveAllOffline(LISTS.owned.map(t => t.id));
+  if ($("#own-keep")) $("#own-keep").onchange = e => { store.set("autoOffline", e.target.checked); if (e.target.checked) saveAllOffline(LISTS.owned.map(t => t.id)); else toast("New music won't download automatically. Songs already saved stay on this device."); };
+  meter();
 }
 VIEWS.offline = () => {
   const list = [...OFF].map(id => byId.get(id)).filter(Boolean); LISTS.offline = list;
