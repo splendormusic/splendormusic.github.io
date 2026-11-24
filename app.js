@@ -140,6 +140,10 @@ async function load() {
   // only music released by identity-verified accounts: no imposters (if the check can't run, nothing is hidden)
   await loadKyc(new Set(all.map(t => t.collection?.author).filter(Boolean)));
   if (KYC.checked) all = all.filter(t => KYC.ok.has(t.collection?.author));
+  // releases an artist has hidden (test mints etc.): gone from Splendor Music
+  const hidden = new Set(Object.values(typeof ARTIST_PROFILES !== "undefined" ? ARTIST_PROFILES : {}).flatMap(p => p.hiddenCollections || []));
+  Object.keys(localStorage).filter(k => k.startsWith("profile:")).forEach(k => (store.get(k, {})?.hiddenCollections || []).forEach(c => hidden.add(c)));
+  all = all.filter(t => !hidden.has(t.collection?.collection_name));
   for (const t of all) {
     const d = t.immutable_data || {};
     if (!d.audio) continue;                              // nothing to play
@@ -855,6 +859,8 @@ function editArtist(name, focusTid) {
       <label>YouTube videos (one link per line)<textarea id="ea-vids" rows="3" placeholder="https://youtu.be/...">${esc((p.videos || []).map(v => "https://youtu.be/" + v.id).join("\n"))}</textarea></label>
       <div class="sub-h">Links</div>
       <div class="link-grid">${keys.map(k => `<label>${esc(LINK_NAMES[k] || k)}<input data-link="${k}" value="${esc(p.links?.[k] || "")}" placeholder="https://"></label>`).join("")}</div>
+      <div class="sub-h">Releases on your page</div>
+      <div class="hide-list">${a.releases.map(r => `<label class="toggle"><input type="checkbox" data-hidecol="${esc(r.collection)}"> Hide “${esc(r.title)}” (for test mints or old versions)</label>`).join("")}</div>
       <div class="sub-h">Artist Pick</div>
       <label>Pin a release<select id="ea-pick"><option value="">None</option>${a.releases.map(r => `<option${p.pick?.release === r.title ? " selected" : ""}>${esc(r.title)}</option>`).join("")}</select></label>
       <label>A note for fans<input id="ea-note" maxlength="160" value="${esc(p.pick?.note || "")}"></label>
@@ -894,14 +900,16 @@ function editArtist(name, focusTid) {
   $("#ea-save", m).onclick = () => {
     keepSong();
     const links = {}; $$("[data-link]", m).forEach(i => { links[i.dataset.link] = i.value.trim(); });
+    const hideCols = [...new Set([...(saved.hiddenCollections || []), ...$$("[data-hidecol]", m).filter(i => i.checked).map(i => i.dataset.hidecol)])];
     const pick = $("#ea-pick", m).value ? { release: $("#ea-pick", m).value, note: $("#ea-note", m).value.trim() } : null;
     const videos = $("#ea-vids", m).value.split(/\s+/).map(u => (u.match(/(?:youtu\.be\/|v=|embed\/|shorts\/)([\w-]{11})/) || [])[1]).filter(Boolean).map(id => ({ id, title: (p.videos || []).find(v => v.id === id)?.title || "Video" }));
     try {
       store.set("profile:" + name, { tagline: $("#ea-tag", m).value.trim(), location: $("#ea-loc", m).value.trim(), bio: $("#ea-bio", m).value.trim(),
-        banner: draft.banner, avatar: draft.avatar, photos: draft.photos, photoCredit: "", videos, links, pick, lyrics: draft.lyrics, stories: draft.stories, credits: draft.credits, albumCredits: draft.albumCredits });
+        banner: draft.banner, avatar: draft.avatar, photos: draft.photos, photoCredit: "", videos, links, pick, lyrics: draft.lyrics, stories: draft.stories, credits: draft.credits, albumCredits: draft.albumCredits, hiddenCollections: hideCols });
       if (!localStorage.getItem("profile:" + name)) throw new Error("full");
     } catch { toast("Couldn't save: this device is out of space for photos. Try fewer gallery photos."); return; }
     MODAL_DIRTY = true; closeModal(); toast("Artist page saved");
+    if (hideCols.length !== (saved.hiddenCollections || []).length) setTimeout(() => location.reload(), 700);   // hidden releases drop out on reload
   };
 }
 

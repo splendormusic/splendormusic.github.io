@@ -39,10 +39,13 @@ From the desert to the water, Splendor is about reclaiming the soul from false r
     ],
     pick: { release: "The Choice Is Yours", note: "My 2018 album, now collectable with its full Music Passport. Every song is yours to keep." },
     releaseDates: { "The Choice Is Yours": "2018-11-30", "The Drifting EP": "2014-01-15" },
+    // test mints (every copy already burned): hidden from Splendor Music until the music is minted properly
+    hiddenCollections: ["lachlangrant", "grantrecords", "psychicmusic"],
     // released everywhere but not minted on Vibrr yet: fans can ask for them (dates + covers from Apple Music)
     notYet: [
       { title: "Splendor", type: "Album", released: "2026-07-31", img: "img/cover-splendor-2026.jpg" },
-      { title: "Cordial", type: "Album", released: "2015-07-31", img: "img/cover-cordial.jpg" }
+      { title: "Cordial", type: "Album", released: "2015-07-31", img: "img/cover-cordial.jpg" },
+      { title: "The Drifting EP", type: "EP", released: "2014-01-15", img: "img/cover-drifting-ep.jpg" }
     ],
     credits: {},        // template id -> credits the artist adds here ("Produced: Name" per line)
     albumCredits: {     // release title -> credits for every song on that release (his word 24 Nov: Pristine's credits cover the album)

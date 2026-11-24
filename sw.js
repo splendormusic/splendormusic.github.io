@@ -4,7 +4,7 @@
    - Fonts: cache first.
    - Songs you save offline live in the "pp-offline-v1" cache (written by wallet.js) and play from there;
      their artwork is served from that cache too. Streaming audio and IPFS images are never intercepted. */
-const SHELL = "pp-shell-v19", RUNTIME = "pp-runtime-v1", AUDIO = "pp-offline-v1";
+const SHELL = "pp-shell-v20", RUNTIME = "pp-runtime-v1", AUDIO = "pp-offline-v1";
 const SHELL_FILES = ["./", "index.html", "style.css", "app.js", "wallet.js", "radio.js", "manifest.json", "fonts/cenotaph-titling.otf", "profiles.js", "img/splendor-lockup.png",
   "icons/icon-192.png", "icons/icon-512.png", "icons/icon-180.png", "icons/favicon.png"];
 
