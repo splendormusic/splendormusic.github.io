@@ -1,4 +1,4 @@
-/* Splendor Music: prototype v0.5.0 (24 Nov 2026: Playlists tab + briefs, brand fonts, Now Playing, back nav; v0.4.4: Vibrr listening copies, real album names, live Vibrr Radio station)
+/* Splendor Music: prototype v0.6.0 (24 Nov 2026: artist pages, lyrics, Haze + logo; v0.5.0: Playlists tab + briefs, brand fonts, Now Playing, back nav; v0.4.4: Vibrr listening copies, real album names, live Vibrr Radio station)
    Concept + product design: Lachlan Grant Splendor (Vibrr Music / Music Passport; X post 15 Sep 2026; the
    playlisting economy). "Mint on Vibrr. Listen, share and earn on Splendor Music."
    Data: public XPR Network chain data only: AtomicAssets (Vibrr's music schema "cxcmus"), Vibrr's split contract
@@ -344,7 +344,7 @@ function initPlayer() {
 }
 
 /* ---------- Now Playing: the full-screen player (tap the artwork; Back, Esc or the arrow closes it) ---------- */
-const NP = { open: false };
+const NP = { open: false, view: "queue" };
 const cssUrl = u => `url("${String(u || "").replace(/["\\\n\r]/g, encodeURIComponent)}")`;
 function npRender() {
   if (!NP.open) return;
@@ -359,6 +359,13 @@ function npRender() {
   $("#np-ctx").textContent = P.ctx || t.release || "Now playing";
   $("#np-pass").href = "#/passport/" + enc(t.id);
   $("#np-like").dataset.like = t.id; $("#np-save").dataset.save = t.id;
+  $$(".np-tabs [data-npv]").forEach(b => b.classList.toggle("on", b.dataset.npv === NP.view));
+  if (NP.view === "lyrics") {
+    const L = lyricsOf(t);
+    $("#np-queue").innerHTML = L.lyrics ? `<div class="np-lyrics">${L.lyrics.split(/\n/).map(l => l.trim() ? `<p>${esc(l)}</p>` : `<p class="gap"></p>`).join("")}</div>${L.story ? `<div class="np-story"><b>The story behind the song</b>${esc(L.story)}</div>` : ""}`
+      : `<div class="small" style="color:rgba(255,255,255,.65)">No lyrics for “${esc(t.title)}” yet. When ${esc(t.artist)} adds them, they appear here.</div>`;
+    refreshHearts(); return;
+  }
   const up = P.queue.slice(P.i + 1, P.i + 40);
   $("#np-queue").innerHTML = up.length ? up.map((x, k) => `<button class="np-qi" data-npq="${P.i + 1 + k}"><img src="${esc(ipfs(x.img))}" alt=""><span><b>${esc(x.title)}</b><small>${esc(x.artist)}</small></span></button>`).join("")
     : `<div class="small" style="color:rgba(255,255,255,.6)">Nothing queued after this song.</div>`;
@@ -385,6 +392,7 @@ function initNP() {
   // phones: tapping the mini player opens Now Playing (like Apple Music); desktop keeps the title link
   $(".p-meta").addEventListener("click", e => { if (matchMedia("(max-width:820px)").matches && P.cur()) { e.preventDefault(); npOpen(); } });
   $("#np-close").onclick = () => npClose();
+  $$(".np-tabs [data-npv]").forEach(b => b.onclick = () => { NP.view = b.dataset.npv; npRender(); });
   $("#np-play").onclick = () => $("#p-play").click();
   $("#np-prev").onclick = () => $("#p-prev").click();
   $("#np-next").onclick = () => $("#p-next").click();
@@ -458,7 +466,7 @@ const artistCard = a => `<a class="card artist-card" href="#/artist/${enc(a.name
 function trackRow(t, i, o = {}) {
   return `<div class="trk${P.cur()?.id === t.id ? " playing" : ""}" data-id="${esc(t.id)}"${o.drag ? ` draggable="true" data-idx="${i}"` : ""}>
     <span class="n"><span class="num">${i + 1}</span><button class="rowplay" data-play="${i}" title="Play">&#9654;</button></span>
-    <span class="ti">${o.thumb ? `<img class="th" loading="lazy" src="${esc(art(t))}" alt="">` : ""}<span><button class="tt" data-play="${i}">${esc(t.title)}</button>${o.artist ? `<a class="sub" href="#/artist/${enc(t.artist)}">${esc(t.artist)}</a>` : ""}</span></span>
+    <span class="ti">${o.thumb ? `<img class="th" loading="lazy" src="${esc(art(t))}" alt="">` : ""}<span><button class="tt" data-play="${i}">${esc(t.title)}${lyricsOf(t).lyrics ? `<span class="lyr-badge" title="Lyrics">LYRICS</span>` : ""}</button>${o.artist ? `<a class="sub" href="#/artist/${enc(t.artist)}">${esc(t.artist)}</a>` : ""}</span></span>
     ${o.release ? `<a class="rel muted" href="#/release/${enc(t.key)}">${esc(t.release)}</a>` : `<span class="rel muted mono">${o.meta ? esc(o.meta(t)) : ""}</span>`}
     <span class="acts">${o.extra || ""}
       ${OWN.has(t.id) ? `<button class="ic off${OFF.has(t.id) ? " on" : ""}" data-offline="${esc(t.id)}" title="${OFF.has(t.id) ? "Saved offline (click to remove)" : "You own this: save offline"}">⤓</button>` : ""}
@@ -603,19 +611,149 @@ function search(q) {
 function artists() {
   view().innerHTML = `<div class="row-head" style="margin-top:0"><h1 style="margin:0">Artists</h1><span class="muted">${ARTISTS.length} on the network</span></div><div class="grid">${ARTISTS.map(artistCard).join("")}</div>`;
 }
+/* ---------- artist profiles: profiles.js + the artist's own edits on this device ---------- */
+function profileOf(name) {
+  const base = (typeof ARTIST_PROFILES !== "undefined" && ARTIST_PROFILES[name]) || {}, mine = store.get("profile:" + name, null) || {};
+  return { ...base, ...mine, links: { ...(base.links || {}), ...(mine.links || {}) }, lyrics: { ...(base.lyrics || {}), ...(mine.lyrics || {}) },
+           stories: { ...(base.stories || {}), ...(mine.stories || {}) }, releaseDates: { ...(base.releaseDates || {}), ...(mine.releaseDates || {}) } };
+}
+const imgUrl = s => !s ? "" : /^(img|icons)\/[\w./-]+$/.test(s) ? s : ipfs(s);      // our own asset, an IPFS CID, or an https image
+const safeHref = u => /^https?:\/\/[^\s"'<>]+$/i.test(String(u || "").trim()) ? String(u).trim() : "";
+function lyricsOf(t) { const p = profileOf(t.artist); return { lyrics: String(p.lyrics?.[t.id] || t.d.lyrics || "").trim(), story: String(p.stories?.[t.id] || "").trim() }; }
+const artistOf = t => ARTISTS.find(a => a.name === t.artist);
+const isArtistOwner = a => { const m = me(); return !!(m && a && a.accounts.has(m)); };
+const relDateOf = r => String(r.released || profileOf(r.artist).releaseDates?.[r.title] || new Date(r.created).toISOString().slice(0, 10));
+const relDateKnown = r => !!(r.released || profileOf(r.artist).releaseDates?.[r.title]);
+const relYear = r => relDateKnown(r) ? relDateOf(r).slice(0, 4) : `minted ${relDateOf(r).slice(0, 4)}`;
+const relKind = r => r.tracks.length >= 7 ? "Album" : r.tracks.length >= 4 ? "EP" : "Single";
+const follows = () => store.get("follows", []);
+const genresOf = a => new Set(a.releases.flatMap(r => r.tracks).flatMap(t => String(t.d.genre || "").toLowerCase().split(/[|,/]/).map(x => x.trim()).filter(Boolean)));
+const LINK_ICON = { spotify: "♫", apple: "♪", bandcamp: "◗", youtube: "▶", instagram: "◎", facebook: "f", x: "𝕏", tiktok: "♪", website: "↗", soundcloud: "☁", telegram: "✈", vibrr: "◆" };
+const linkPills = links => links.map(([k, u]) => `<a class="lpill" target="_blank" rel="noopener" href="${esc(u)}"><span>${LINK_ICON[k] || "↗"}</span>${esc((typeof LINK_NAMES !== "undefined" && LINK_NAMES[k]) || k)}</a>`).join("");
+
 function artist(name) {
   const a = ARTISTS.find(x => x.name === name); if (!a) return notFound();
-  const all = a.releases.flatMap(r => r.tracks); LISTS.artist = all;
-  view().innerHTML = `<section class="plhead"><img src="${esc(ipfs(a.img))}" alt="" style="width:200px;height:200px;border-radius:50%;object-fit:cover;flex:none">
-      <div class="plmeta"><div class="eyebrow">Artist</div><h1>${esc(a.name)}</h1>
-      <div class="muted">${plural(songCount(a), "song")} · ${plural(a.releases.length, "release")} · ${plural(a.collected, "copy", "copies")} minted</div>
-      <div class="supporters">${[...a.accounts].map(acc => supChip(acc)).join("")}</div>
-      <div class="actions"><button class="btn big" id="play-artist">&#9654; Play all</button><button class="btn ghost" id="shuf-artist">&#8644; Shuffle</button><button class="btn ghost" data-save="${esc(all.map(t => t.id).join(","))}" data-label="${esc("All songs by " + a.name)}">+ Save all</button></div></div></section>
-    <div class="row-head"><h2>Songs</h2></div>${listHead()}<div class="tracks" data-list="artist">${all.map((t, i) => trackRow(t, i, { thumb: 1, release: 1 })).join("")}</div>
-    <div class="row-head"><h2>Discography</h2></div><div class="grid">${a.releases.map(relCard).join("")}</div>`;
-  $("#play-artist").onclick = () => playQueue(all); setAmbient(a.img);
-  $("#shuf-artist").onclick = () => playQueue(shuffled(all));
+  const p = profileOf(a.name), all = a.releases.flatMap(r => r.tracks); LISTS.artist = all;
+  const plays = t => VR.byId.get(t.id)?.plays || 0, vrPlays = all.reduce((n, t) => n + plays(t), 0);
+  const popular = all.slice().sort((x, y) => (plays(y) + 4 * (y.issued || 0)) - (plays(x) + 4 * (x.issued || 0))).slice(0, 10); LISTS.popular = popular;
+  const popMeta = t => [plays(t) ? plural(plays(t), "play") : "", t.issued ? `${t.issued} collected` : ""].filter(Boolean).join(" · ");
+  const rels = a.releases.slice().sort((x, y) => relDateOf(y).localeCompare(relDateOf(x)));
+  const pickRel = p.pick?.release && a.releases.find(r => r.title.toLowerCase() === String(p.pick.release).toLowerCase());
+  const owner = isArtistOwner(a), fol = follows().includes(a.name);
+  const banner = imgUrl(p.banner), avatar = imgUrl(p.avatar) || ipfs(a.img);
+  const links = Object.entries(p.links || {}).map(([k, u]) => [k, safeHref(u)]).filter(([, u]) => u);
+  const g = genresOf(a), fans = ARTISTS.filter(x => x !== a && [...genresOf(x)].some(y => g.has(y))).slice(0, 6);
+  const elsewhere = (p.elsewhere || []).filter(e => e && e.title);
+  const card = (r, label) => `<a class="pick-card" href="#/release/${enc(r.key)}"><img src="${esc(ipfs(r.img))}" alt=""><span><span class="eyebrow">${label}</span><b>${esc(r.title)}</b><small>${relKind(r)} · ${esc(relYear(r))} · ${plural(r.tracks.length, "song")}</small>${label === "Artist Pick" && p.pick?.note ? `<em>“${esc(p.pick.note)}”</em>` : ""}</span></a>`;
+  const discCards = k => [
+    ...(k === "elsewhere" ? [] : rels.filter(r => !k || relKind(r) === k).map(r => `<a class="card" href="#/release/${enc(r.key)}"><div class="art"><img loading="lazy" src="${esc(ipfs(r.img))}" alt=""><button class="fab" data-playrel="${esc(r.key)}" title="Play ${esc(r.title)}">&#9654;</button></div><div class="c"><div class="t">${esc(r.title)}</div><div class="a">${esc(relYear(r))} · ${relKind(r)}</div></div></a>`)),
+    ...(!k || k === "elsewhere" ? elsewhere.map(e => { const first = Object.values(e.links || {}).map(safeHref).find(Boolean) || "#"; return `<a class="card" target="_blank" rel="noopener" href="${esc(first)}"><div class="art"><img loading="lazy" src="${esc(imgUrl(e.img))}" alt=""><span class="not-minted">Out everywhere</span></div><div class="c"><div class="t">${esc(e.title)}</div><div class="a">${esc(String(e.released || "").slice(0, 4))} · ${esc(e.type || "Release")} · not minted yet</div></div></a>`; }) : [])
+  ].join("") || `<p class="muted">Nothing here yet.</p>`;
+  view().innerHTML = `
+  <section class="artist-hero${banner ? " has-banner" : ""}" style="--ab:${esc(cssUrl(banner || ipfs(a.img)))}">
+    <div class="ah-in"><img class="ah-av" src="${esc(avatar)}" alt="">
+      <div class="ah-txt"><div class="eyebrow">Artist${p.bio ? " · page by the artist" : ""}</div>
+        <h1 class="ah-name">${esc(a.name)}</h1>
+        ${p.tagline || p.location ? `<div class="ah-tag">${esc([p.tagline, p.location].filter(Boolean).join(" · "))}</div>` : ""}
+        <div class="ah-stats"><span><b>${songCount(a)}</b> songs</span><span><b>${a.releases.length}</b> on chain</span><span><b>${a.collected.toLocaleString()}</b> collected</span>${vrPlays ? `<span><b>${vrPlays.toLocaleString()}</b> Vibrr Radio plays</span>` : ""}</div></div></div>
+    ${banner && p.photoCredit ? `<span class="ah-credit">${esc(p.photoCredit)}</span>` : ""}
+  </section>
+  <div class="actions ah-actions"><button class="btn big" id="play-artist">&#9654; Play</button><button class="btn ghost" id="shuf-artist">&#8644; Shuffle</button>
+    <button class="btn ghost${fol ? " on" : ""}" id="follow">${fol ? "✓ Following" : "+ Follow"}</button><button class="btn ghost" id="share-artist">Share</button>
+    ${owner ? `<button class="btn ghost" id="edit-artist">✎ Edit artist page</button>` : ""}</div>
+  <div class="subtabs"><button data-jump="popular" class="on">Popular</button><button data-jump="discography">Discography</button><button data-jump="about">About</button>${fans.length ? `<button data-jump="fans">Fans also like</button>` : ""}</div>
+  <div class="ah-top" id="popular">
+    <div><h2>Popular</h2><div class="tracks" data-list="popular" id="pop-list">${popular.slice(0, 5).map((t, i) => trackRow(t, i, { thumb: 1, meta: popMeta })).join("")}</div>
+      ${popular.length > 5 ? `<button class="btn ghost sm" id="pop-more">Show 5 more</button>` : ""}</div>
+    <div class="ah-side">${pickRel ? card(pickRel, "Artist Pick") : ""}${(() => {
+      // latest = newest release with a real release date, minted or out everywhere (mint dates alone don't count)
+      const known = rels.filter(relDateKnown).map(r => ({ d: relDateOf(r), r })), out = elsewhere.filter(e => e.released).map(e => ({ d: String(e.released), e }));
+      const top = [...known, ...out].sort((x, y) => y.d.localeCompare(x.d))[0];
+      if (!top) return rels[0] && rels[0] !== pickRel ? card(rels[0], "Latest release") : "";
+      if (top.r) return top.r !== pickRel ? card(top.r, "Latest release") : "";
+      const e = top.e, href = Object.values(e.links || {}).map(safeHref).find(Boolean) || "#";
+      return `<a class="pick-card" target="_blank" rel="noopener" href="${esc(href)}"><img src="${esc(imgUrl(e.img))}" alt=""><span><span class="eyebrow">Latest release</span><b>${esc(e.title)}</b><small>${esc(e.type || "Release")} · ${esc(relDate(e.released))} · out everywhere</small><em>${Object.keys(e.links || {}).filter(k => safeHref(e.links[k])).map(k => esc(LINK_NAMES[k] || k)).join(" · ")}</em></span></a>`;
+    })()}</div>
+  </div>
+  <div class="row-head" id="discography"><h2>Discography</h2></div>
+  <div class="chips" id="disc-chips"><button class="chip on" data-k="">All</button>${["Album", "EP", "Single"].filter(k => rels.some(r => relKind(r) === k)).map(k => `<button class="chip" data-k="${k}">${k === "Album" ? "Albums" : k === "EP" ? "EPs" : "Singles"}</button>`).join("")}${elsewhere.length ? `<button class="chip" data-k="elsewhere">Out everywhere</button>` : ""}</div>
+  <div class="grid" id="disc">${discCards("")}</div>
+  <div class="row-head" id="about"><h2>About</h2></div>
+  <div class="about-grid">
+    <div class="panel about-main">
+      ${(p.photos || []).length ? `<div class="gallery">${p.photos.map(imgUrl).filter(Boolean).map(s => `<img loading="lazy" src="${esc(s)}" alt="">`).join("")}</div>${p.photoCredit ? `<div class="muted small" style="margin:6px 0 0">${esc(p.photoCredit)}</div>` : ""}` : ""}
+      ${p.bio ? `<div class="bio">${esc(p.bio)}</div>` : `<p class="muted">${esc(a.name)} hasn't written a bio yet.${owner ? " Add one with Edit artist page." : ""}</p>`}
+      ${p.location ? `<div class="muted small" style="margin-top:12px">📍 ${esc(p.location)}</div>` : ""}
+      <div class="lpills" id="ab-links">${linkPills(links)}</div></div>
+    <div class="panel"><h3 style="margin-top:0">Support ${esc(a.name)}</h3>
+      <p class="muted" style="margin-top:0">Collect a song and the artist is paid in the same transaction, through the split on their Music Passport. No middleman takes a cut, and you keep the song.</p>
+      <a class="btn" target="_blank" rel="noopener" href="https://vibrr.ai/vibrr-market/collection/${enc(rels[0]?.collection || "")}">Collect on Vibrr ↗</a>
+      <div class="sub-h" style="margin-top:20px">On chain as</div><div class="supporters">${[...a.accounts].map(acc => supChip(acc)).join("")}</div></div>
+  </div>
+  ${fans.length ? `<div class="row-head" id="fans"><h2>Fans also like</h2></div><div class="grid">${fans.map(artistCard).join("")}</div>` : ""}`;
+  $("#play-artist").onclick = () => playQueue(popular.length ? popular.concat(all.filter(t => !popular.includes(t))) : all, 0, a.name);
+  $("#shuf-artist").onclick = () => playQueue(shuffled(all), 0, a.name);
+  $("#follow").onclick = () => { const f = follows(), on = f.includes(a.name); store.set("follows", on ? f.filter(x => x !== a.name) : [...f, a.name]); toast(on ? `Unfollowed ${a.name}` : `Following ${a.name}`); route(true); };
+  $("#share-artist").onclick = () => shareModal(`${a.name} on Splendor Music`, location.href);
+  if ($("#edit-artist")) $("#edit-artist").onclick = () => editArtist(a.name);
+  if ($("#pop-more")) $("#pop-more").onclick = e => { $("#pop-list").innerHTML = popular.map((t, i) => trackRow(t, i, { thumb: 1, meta: popMeta })).join(""); e.target.remove(); markPlaying(); };
+  $$("#disc-chips [data-k]").forEach(b => b.onclick = () => { $$("#disc-chips .chip").forEach(c => c.classList.toggle("on", c === b)); $("#disc").innerHTML = discCards(b.dataset.k); });
+  $$(".subtabs [data-jump]").forEach(b => b.onclick = () => { $$(".subtabs button").forEach(x => x.classList.toggle("on", x === b)); $("#" + b.dataset.jump)?.scrollIntoView({ behavior: "smooth", block: "start" }); });
+  setAmbient(p.banner ? null : a.img);
   hydrate(view());
+  if (!links.length) chainSocials(a);
+}
+/* artists without a profile yet: show the socials they put in their Vibrr collection on chain */
+async function chainSocials(a) {
+  const out = new Map();
+  for (const c of [...new Set(a.releases.map(r => r.collection))].slice(0, 6)) {
+    try {
+      const d = (await getJSON(`${API}/collections/${enc(c)}`))?.data || {};
+      let s = d.socials; if (typeof s === "string") { try { s = JSON.parse(s); } catch { s = {}; } }
+      Object.entries(s || {}).forEach(([k, u]) => { if (safeHref(u) && !out.has(k)) out.set(k, safeHref(u)); });
+      const site = safeHref(d.url) || (/^[\w-]+(\.[\w-]+)+\/?$/.test(String(d.url || "")) ? "https://" + d.url : "");
+      if (site && !out.has("website")) out.set("website", site);
+    } catch {}
+  }
+  const el = $("#ab-links"); if (el && out.size) el.innerHTML = linkPills([...out.entries()]);
+}
+/* the artist edits their own page: bio, photos, links, Artist Pick, lyrics and song stories */
+function editArtist(name, focusTid) {
+  const a = ARTISTS.find(x => x.name === name); if (!a) return;
+  const p = profileOf(name), all = a.releases.flatMap(r => r.tracks), keys = ["website", "spotify", "apple", "bandcamp", "youtube", "instagram", "facebook", "x", "tiktok", "soundcloud"];
+  const m = modal(`<div class="m-head"><div><h3>Edit artist page</h3><div class="muted small">${esc(name)}</div></div><button class="x" data-mclose>&times;</button></div>
+    <div class="m-body">
+      <label>Tagline<input id="ea-tag" maxlength="90" value="${esc(p.tagline || "")}" placeholder="One line about your music"></label>
+      <label>Location<input id="ea-loc" maxlength="80" value="${esc(p.location || "")}"></label>
+      <label>Bio<textarea id="ea-bio" rows="7" maxlength="3000">${esc(p.bio || "")}</textarea></label>
+      <label>Banner image (https link or IPFS CID)<input id="ea-banner" value="${esc(p.banner || "")}"></label>
+      <label>Profile photo (https link or IPFS CID)<input id="ea-av" value="${esc(p.avatar || "")}"></label>
+      <div class="sub-h">Links</div>
+      <div class="link-grid">${keys.map(k => `<label>${esc(LINK_NAMES[k] || k)}<input data-link="${k}" value="${esc(p.links?.[k] || "")}" placeholder="https://"></label>`).join("")}</div>
+      <div class="sub-h">Artist Pick</div>
+      <label>Pin a release<select id="ea-pick"><option value="">None</option>${a.releases.map(r => `<option${p.pick?.release === r.title ? " selected" : ""}>${esc(r.title)}</option>`).join("")}</select></label>
+      <label>A note for fans<input id="ea-note" maxlength="160" value="${esc(p.pick?.note || "")}"></label>
+      <div class="sub-h" id="ea-lyr-h">Lyrics and the story behind the song</div>
+      <label>Song<select id="ea-song">${all.map(t => `<option value="${esc(t.id)}"${t.id === focusTid ? " selected" : ""}>${esc(t.title)}${p.lyrics?.[t.id] ? " ✓" : ""}</option>`).join("")}</select></label>
+      <label>Lyrics<textarea id="ea-lyrics" rows="9" maxlength="8000" placeholder="Paste the lyrics, one line per line. Blank lines between verses."></textarea></label>
+      <label>The story behind the song (optional)<textarea id="ea-story" rows="4" maxlength="2000" placeholder="Where it came from, what it means to you"></textarea></label>
+      <p class="muted small" style="margin:0">Prototype: your changes are saved on this device and show straight away. Publishing them for every listener comes with signed artist profiles on Vibrr.</p>
+    </div>
+    <div class="m-foot"><button class="btn ghost" data-mclose>Cancel</button><button class="btn" id="ea-save">Save</button></div>`, "wide sheet");
+  const draft = { lyrics: { ...(store.get("profile:" + name, null)?.lyrics || {}) }, stories: { ...(store.get("profile:" + name, null)?.stories || {}) } };
+  const loadSong = () => { const id = $("#ea-song", m).value, t = byId.get(id); $("#ea-lyrics", m).value = draft.lyrics[id] ?? p.lyrics?.[id] ?? t?.d.lyrics ?? ""; $("#ea-story", m).value = draft.stories[id] ?? p.stories?.[id] ?? ""; };
+  const keepSong = () => { const id = $("#ea-song", m).value; draft.lyrics[id] = $("#ea-lyrics", m).value.trim(); draft.stories[id] = $("#ea-story", m).value.trim(); };
+  let cur = $("#ea-song", m).value; loadSong();
+  $("#ea-song", m).onchange = () => { const nx = $("#ea-song", m).value; $("#ea-song", m).value = cur; keepSong(); $("#ea-song", m).value = cur = nx; loadSong(); };
+  if (focusTid) setTimeout(() => $("#ea-lyr-h", m)?.scrollIntoView({ block: "start" }), 50);
+  $("#ea-save", m).onclick = () => {
+    keepSong();
+    const links = {}; $$("[data-link]", m).forEach(i => { links[i.dataset.link] = i.value.trim(); });
+    const pick = $("#ea-pick", m).value ? { release: $("#ea-pick", m).value, note: $("#ea-note", m).value.trim() } : null;
+    store.set("profile:" + name, { tagline: $("#ea-tag", m).value.trim(), location: $("#ea-loc", m).value.trim(), bio: $("#ea-bio", m).value.trim(),
+      banner: $("#ea-banner", m).value.trim(), avatar: $("#ea-av", m).value.trim(), links, pick, lyrics: draft.lyrics, stories: draft.stories });
+    MODAL_DIRTY = true; closeModal(); toast("Artist page saved");
+  };
 }
 
 async function release(key) {
@@ -770,6 +908,8 @@ async function passportPage(id) {
       <div class="k">Raw record</div><div class="v"><a class="mono" target="_blank" rel="noopener" href="${API}/templates/${enc(t.collection)}/${enc(t.id)}">template ${esc(t.id)} ↗</a></div>
     </div></div>
     <div class="panel wide"><h2>Collectors</h2><div id="collectors"><span class="muted">Checking the chain…</span></div></div>
+    ${(() => { const L = lyricsOf(t), own = isArtistOwner(artistOf(t)); return `<div class="panel wide lyrics-panel" id="lyrics"><h2>Lyrics</h2>${L.lyrics ? `<div class="lyrics">${esc(L.lyrics)}</div>` : `<p class="muted" style="margin:0">No lyrics yet. When ${esc(t.artist)} adds them, they show here and in Now Playing.</p>`}
+      ${L.story ? `<h3 style="margin-top:20px">The story behind the song</h3><div class="about" style="margin-top:6px">${esc(L.story)}</div>` : ""}${own ? `<button class="btn ghost sm" style="margin-top:14px" data-editlyrics="${esc(t.id)}">✎ ${L.lyrics ? "Edit" : "Add"} lyrics and story</button>` : ""}</div>`; })()}
     ${d.about ? `<div class="panel wide"><h2>About</h2><div class="about" style="margin:0">${esc(d.about)}</div></div>` : ""}
   </section>`;
   if (d.backimg) { let back = false; $("#flip").onclick = () => { back = !back; $("#pass-img").src = ipfs(back ? d.backimg : t.img); }; }
@@ -1521,6 +1661,7 @@ function route(keep) {
       if (last && last !== curHash()) { e.preventDefault(); location.hash = last; }
       return;
     }
+    const el = t.closest("[data-editlyrics]"); if (el) { const tt = byId.get(el.dataset.editlyrics); if (tt) editArtist(tt.artist, tt.id); return; }
     const pr = t.closest("[data-playrel]"); if (pr) { e.preventDefault(); const r = relByKey.get(pr.dataset.playrel); if (r) playQueue(r.tracks); return; }
     const pp = t.closest("[data-playpl]"); if (pp) { e.preventDefault(); const p = PL.get(pp.dataset.playpl); if (p) playQueue(p.ids.map(i => byId.get(i))); return; }
     const pl = t.closest("[data-play]"); if (pl) { const box = pl.closest("[data-list]"), list = box && LISTS[box.dataset.list]; if (list) playQueue(list, +pl.dataset.play, box.dataset.ctx || ""); return; }

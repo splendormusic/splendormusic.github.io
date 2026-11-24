@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <link rel="preload" href="fonts/cenotaph-titling.otf" as="font" type="font/otf" crossorigin>
-<link rel="stylesheet" href="style.css?v=0.5.0">
+<link rel="stylesheet" href="style.css?v=0.6.0">
 </head>
 <body>
 <div id="ambient" aria-hidden="true"></div>
@@ -34,7 +34,7 @@
   <button id="me-btn" class="me-chip empty" title="Your XPR account">Sign in</button>
 </header>
 
-<main id="view"><div class="loading">Reading music from the XPR Network…</div></main>
+<main id="view"><div class="loading"><img class="load-logo" src="img/splendor-lockup.png" alt="Splendor">Reading music from the XPR Network…</div></main>
 
 <footer class="player" id="player">
   <button id="p-open" class="p-open" title="Open Now Playing"><img id="p-art" alt=""></button>
@@ -72,7 +72,7 @@
           <button id="np-next" title="Next">&#9197;</button>
           <button id="np-save" class="ic" title="Save to playlist">+</button>
         </div>
-        <div class="np-q"><div class="np-qh">Up next</div><div id="np-queue"></div></div>
+        <div class="np-q"><div class="np-tabs"><button class="on" data-npv="queue">Up next</button><button data-npv="lyrics">Lyrics</button></div><div id="np-queue"></div></div>
       </div>
     </div>
   </div>
@@ -87,8 +87,9 @@
   <a href="#/library" data-nav="library"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="3.2" height="16" rx="1"/><rect x="9.4" y="4" width="3.2" height="16" rx="1"/><path d="m15.2 4.9 3-.8 3.4 15.4-3 .8z"/></svg><span>Library</span></a>
 </nav>
 
-<script src="app.js?v=0.5.0"></script>
-<script src="wallet.js?v=0.5.0"></script>
-<script src="radio.js?v=0.5.0"></script>
+<script src="profiles.js?v=0.6.0"></script>
+<script src="app.js?v=0.6.0"></script>
+<script src="wallet.js?v=0.6.0"></script>
+<script src="radio.js?v=0.6.0"></script>
 </body>
 </html>
