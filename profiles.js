@@ -1,4 +1,4 @@
-/* Splendor Music: artist profiles (v0.7, 24 Nov 2026).
+/* Splendor Music: artist profiles (v0.8, 24 Nov 2026).
    What an artist shows on their page beyond the chain: bio, photos, links, Artist Pick, videos, lyrics and the story behind
    each song, and the releases that aren't minted yet (fans can ask for them). Keyed by the artist name used on chain.
    Artists edit their own page in the app (Edit artist page): saved on their device and shown straight away.
@@ -26,20 +26,32 @@ From the desert to the water, Splendor is about reclaiming the soul from false r
       apple: "https://music.apple.com/au/artist/lachlan-grant-splendor/1424199435",
       bandcamp: "https://lachlangrantsplendor.bandcamp.com"
     },
+    // newest first; artists choose these in Edit artist page (official videos first, then live)
     videos: [
-      { id: "eQC1-2Y8X1c", title: "Me and My Guitar (Official Music Video)" },
-      { id: "ZzPnHGLjG90", title: "The Wanderer (Official Video)" }
+      { id: "eQC1-2Y8X1c", title: "Me and My Guitar", kind: "Official music video" },
+      { id: "ZzPnHGLjG90", title: "The Wanderer", kind: "Official music video" },
+      { id: "Pkibk-4gAt4", title: "Dank Dollars", kind: "Official music video" },
+      { id: "OrbvSCTDO4w", title: "Evolving Souls", kind: "Official music video" },
+      { id: "EGMXzewezDo", title: "Dark Night Moon Light", kind: "Official music video" },
+      { id: "J67Gtt-pTZk", title: "Pristine", kind: "Official music video" },
+      { id: "myL1-cO0PUU", title: "Fathers Second Son", kind: "Official music video" },
+      { id: "LgJ48jwu9KI", title: "Collective", kind: "Live acoustic" },
+      { id: "mz8Eg_YOmvE", title: "Desperate Love", kind: "Live in the studio" },
+      { id: "fKCyBiWcUcs", title: "Keep The Dream Alive", kind: "Live in the studio" },
+      { id: "79d2U8pn0JY", title: "Dependent Happiness", kind: "Live acoustic" }
     ],
     pick: { release: "The Choice Is Yours", note: "My 2018 album, now collectable with its full Music Passport. Every song is yours to keep." },
     releaseDates: { "The Choice Is Yours": "2018-11-30", "The Drifting EP": "2014-01-15" },
     // released everywhere but not minted on Vibrr yet: fans can ask for them (dates + covers from Apple Music)
     notYet: [
-      { title: "Splendor", type: "Album", released: "2026-07-31", img: "img/cover-splendor-2026.jpg" },
-      { title: "The Thinker", type: "Single", released: "2026-03-13", img: "img/cover-the-thinker.jpg" },
-      { title: "Leave Your Man For Me", type: "Single", released: "2025-11-14", img: "img/cover-lymfm.jpg" },
-      { title: "Splendor EP", type: "EP", released: "2025-06-13", img: "img/cover-splendor-ep.jpg" },
-      { title: "Dank Dollars", type: "Single", released: "2025-03-21", img: "img/cover-dank-dollars.jpg" },
-      { title: "Cordial", type: "Album", released: "2015-07-31", img: "img/cover-cordial.jpg" }
+      { title: "Splendor", type: "Album", released: "2026-07-31", img: "img/cover-splendor-2026.jpg",
+        tracks: ["The Wanderer", "A Decent Dude", "Me and My Guitar", "The Thinker", "Too Much Pressure", "The Day I Wake Up", "Dank Dollars", "Gone Surfing", "The Observer", "Leave Your Man For Me", "Never Be The Same", "The Witness"] },
+      { title: "The Thinker", type: "Single", released: "2026-03-13", img: "img/cover-the-thinker.jpg", tracks: ["The Thinker"] },
+      { title: "Leave Your Man For Me", type: "Single", released: "2025-11-14", img: "img/cover-lymfm.jpg", tracks: ["Leave Your Man For Me"] },
+      { title: "Splendor EP", type: "EP", released: "2025-06-13", img: "img/cover-splendor-ep.jpg", tracks: ["The Day I Wake Up", "Gone Surfing", "Never Be The Same", "The Observer"] },
+      { title: "Dank Dollars", type: "Single", released: "2025-03-21", img: "img/cover-dank-dollars.jpg", tracks: ["Dank Dollars"] },
+      { title: "Cordial", type: "Album", released: "2015-07-31", img: "img/cover-cordial.jpg",
+        tracks: ["A Few More Days", "To Be The Elite", "Searching For Similarities", "Cordial", "If Only I Could See", "Me And You", "Devoid Of Sympathy", "The Trend Of Society", "He Who Dies", "I Hope It's Not Too Late", "How Good Would It Be", "The Guy Who Lied"] }
     ],
     lyrics: {},     // template id -> lyrics text (the artist adds these in the app)
     stories: {}     // template id -> the story behind the song, in the artist's words

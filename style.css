@@ -438,11 +438,10 @@ body.embed .plmeta h1{font-size:26px}
    UI: Inter (closest web match to Apple's SF). Chain data: JetBrains Mono. Blue from the Pisces S logo.
    ===================================================================================================== */
 @font-face{font-family:"Cenotaph Titling";src:url("fonts/cenotaph-titling.otf") format("opentype");font-display:swap;unicode-range:U+0020-002F,U+003A-007E,U+00A0-00FF,U+2010-2027}
-/* Haze (The Branded Quotes; demo copy, full licence to be bought before launch): letters only, numbers + punctuation fall back */
-@font-face{font-family:"Haze";src:url("fonts/haze.woff2") format("woff2");font-display:swap;unicode-range:U+0041-005A,U+0061-007A,U+00C0-00D6,U+00D8-00F6,U+00F8-00FF}
+/* Haze (brush font) removed 24 Nov: it didn't read well as on-screen titles, and the demo licence is personal use only */
 :root{
   --display:"Cenotaph Titling",Inter,Georgia,serif;
-  --title:"Haze","Cenotaph Titling",Inter,sans-serif;
+  --title:"Cenotaph Titling",Inter,Georgia,serif;
   --ui:Inter,-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
   --pisces:#404898; --accent:#b4bcff; --accent2:#7b88ff; --glow:rgba(123,136,255,.35);
   --bg:#07070a; --panel:#101015; --panel2:#17171e; --panel3:#202029; --line:#22222b; --line2:#31313d;
@@ -767,3 +766,38 @@ body.np-open{overflow:hidden}
 }
 .hero h1{font-size:clamp(34px,4.6vw,58px)}
 .hero::before,.manifesto::before{right:30px;opacity:.07}
+
+/* ===== v0.8 (24 Nov 2026): vinyl watermark, plain-language polish, privacy, in-page Back ===== */
+.brief h2,.econ-banner h2{font-family:var(--display);font-weight:400;letter-spacing:.04em;line-height:1.05}
+.brief h2{font-size:44px}.econ-banner h2{font-size:32px}
+/* the Splendor logo on a vinyl record, straight and faded behind the headlines */
+.hero::before,.manifesto::before{background:url("img/splendor-vinyl.webp") center/contain no-repeat;width:440px;height:440px;right:-70px;top:50%;transform:translateY(-50%);opacity:.16}
+.hero,.manifesto{min-height:300px}
+/* in-page Back link at the top of detail pages */
+.crumb{display:inline-flex;align-items:center;gap:6px;margin:0 0 14px;padding:7px 14px 7px 10px;border-radius:999px;background:rgba(255,255,255,.07);color:var(--text);font-weight:600;font-size:14px;position:relative;z-index:3}
+.crumb:hover{background:rgba(255,255,255,.14)}
+.crumb + .artist-hero{border-radius:22px;margin-top:0}
+/* tucked-away detail */
+details.tech > summary,details.tech-d > summary{cursor:pointer;font-weight:700;font-size:16px;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;list-style:none}
+details.tech > summary::-webkit-details-marker,details.tech-d > summary::-webkit-details-marker{display:none}
+details.tech > summary::before,details.tech-d > summary::before{content:"\25B8";color:var(--muted);display:inline-block;transition:transform .15s}
+details.tech[open] > summary::before,details.tech-d[open] > summary::before{transform:rotate(90deg)}
+details.tech-d{margin-top:16px}details.tech-d > summary{font-size:14px;color:var(--muted)}
+.lead{font-size:17px;color:#dcd8ea;max-width:760px;margin:0 0 14px}
+/* not here yet: fold-ins + per-song asks */
+.ny-wrap{display:flex;flex-direction:column;gap:6px}
+.ny-inc{color:var(--accent)!important;opacity:.85}
+.ny-songs{padding:0 4px}.ny-songs > summary{cursor:pointer;font-size:13px;color:var(--muted);padding:2px 6px}
+.ny-song{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 6px;border-bottom:1px solid rgba(255,255,255,.05);font-size:14px}
+.vt small{display:block;font-weight:500;font-size:12px;opacity:.75}
+/* Artists tab: a door for artists */
+.artist-door{display:flex;justify-content:space-between;align-items:center;gap:16px;margin:0 0 26px;padding:16px 20px;border-radius:16px;background:linear-gradient(120deg,rgba(64,72,152,.35),rgba(123,136,255,.08));border:1px solid rgba(123,136,255,.25)}
+.artist-door:hover{color:inherit;border-color:rgba(123,136,255,.5)}
+/* For artists page */
+.fa-hero h1{font-size:clamp(34px,4.4vw,56px)}
+.fa-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:22px}
+.fa-card{padding:22px;border-radius:18px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.06)}
+.fa-card b{display:block;font-size:18px;margin:10px 0 6px;letter-spacing:-.01em}.fa-card p{margin:0;color:var(--muted)}
+.fa-i{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:rgba(123,136,255,.15);color:var(--accent);font-size:20px}
+@media (max-width:980px){ .fa-grid{grid-template-columns:1fr 1fr} }
+@media (max-width:820px){ .fa-grid{grid-template-columns:1fr} .hero::before,.manifesto::before{width:260px;height:260px;right:-60px;opacity:.12} .brief h2{font-size:34px} .artist-door{flex-direction:column;align-items:flex-start} }

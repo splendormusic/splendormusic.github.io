@@ -1,4 +1,4 @@
-/* Splendor Music: prototype v0.7.0 (24 Nov 2026: photo upload + crop, not-yet releases + asks, videos, industry-standard titles; v0.6.0: artist pages, lyrics, Haze + logo; v0.5.0: Playlists tab + briefs, brand fonts, Now Playing, back nav; v0.4.4: Vibrr listening copies, real album names, live Vibrr Radio station)
+/* Splendor Music: prototype v0.8.0 (24 Nov 2026: privacy-first artist pages, plain words, For artists page, vinyl; v0.7.0: photo upload + crop, not-yet releases + asks, videos, industry-standard titles; v0.6.0: artist pages, lyrics, Haze + logo; v0.5.0: Playlists tab + briefs, brand fonts, Now Playing, back nav; v0.4.4: Vibrr listening copies, real album names, live Vibrr Radio station)
    Concept + product design: Lachlan Grant Splendor (Vibrr Music / Music Passport; X post 15 Sep 2026; the
    playlisting economy). "Mint on Vibrr. Listen, share and earn on Splendor Music."
    Data: public XPR Network chain data only: AtomicAssets (Vibrr's music schema "cxcmus"), Vibrr's split contract
@@ -460,7 +460,7 @@ const notFound = () => view().innerHTML = `<div class="empty-state"><b>Not found
 
 const relCard = r => `<a class="card" href="#/release/${enc(r.key)}"><div class="art"><img loading="lazy" src="${esc(ipfs(r.img))}" alt=""><button class="fab" data-playrel="${esc(r.key)}" title="Play ${esc(r.title)}">&#9654;</button></div><div class="c"><div class="t">${esc(r.title)}</div><div class="a">${esc(r.artist)} · ${plural(r.tracks.length, "track")}</div></div></a>`;
 const plCard = p => `<a class="card" href="#/pl/${enc(p.id)}"><div class="art">${p.liked ? `<div class="mosaic liked">&#9829;</div>` : mosaic(p.ids)}${p.ids.length ? `<button class="fab" data-playpl="${esc(p.id)}" title="Play">&#9654;</button>` : ""}</div><div class="c"><div class="t">${esc(p.name)}</div><div class="a">${p.liked ? "Collection" : "Playlist"} · ${plural(p.ids.length, "song")}${p.curator ? ` · by ${esc(p.curator)}` : ""}</div></div></a>`;
-const artistCard = a => `<a class="card artist-card" href="#/artist/${enc(a.name)}"><img loading="lazy" src="${esc(ipfs(a.img))}" alt=""><div class="c"><div class="t">${esc(a.name)}</div><div class="a">${plural(songCount(a), "song")} · ${a.collected.toLocaleString()} minted</div></div></a>`;
+const artistCard = a => `<a class="card artist-card" href="#/artist/${enc(a.name)}"><img loading="lazy" src="${esc((typeof profileOf === "function" && imgUrl(profileOf(a.name).avatar)) || ipfs(a.img))}" alt=""><div class="c"><div class="t">${esc(a.name)}</div><div class="a">${plural(songCount(a), "song")} · ${a.collected.toLocaleString()} collected</div></div></a>`;
 
 /* one track row: number/play, title + artist, release or meta, like / save / Passport (/ remove) */
 function trackRow(t, i, o = {}) {
@@ -557,22 +557,22 @@ function home() {
   TRACKS.forEach(t => String(t.d.genre || "").split(/[|,/]/).map(g => g.trim()).filter(g => g && g.length < 24).forEach(g => gc.set(g, (gc.get(g) || 0) + 1)));
   const genres = [...gc.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12).map(x => x[0]);
   view().innerHTML = `
-    <section class="hero"><div class="eyebrow">Splendor Music · on the XPR Network</div>
+    <section class="hero"><div class="eyebrow">Splendor Music</div>
       <h1>Hear it. Own it. Pass it on.</h1>
       <p class="hero-sub">Music you keep, from artists you pay directly.</p>
-      <p>Every song carries its Music Passport: who made it, who owns it, who gets paid. Mint on Vibrr, listen here, and when you share it, everyone who helped earns.</p>
-      <div class="stats"><div class="stat"><b>${RELEASES.length}</b><span>releases</span></div><div class="stat"><b>${TRACKS.length}</b><span>songs</span></div><div class="stat"><b>${ARTISTS.length}</b><span>artists</span></div><div class="stat"><b>${minted.toLocaleString()}</b><span>copies minted</span></div></div></section>
+      <p>Every song comes with its Music Passport: who made it, who owns it, who gets paid. Artists release on Vibrr, you listen here, and when you share it, everyone who helped earns.</p>
+      <div class="stats"><div class="stat"><b>${RELEASES.length}</b><span>releases</span></div><div class="stat"><b>${TRACKS.length}</b><span>songs</span></div><div class="stat"><b>${ARTISTS.length}</b><span>artists</span></div><div class="stat"><b>${minted.toLocaleString()}</b><span>copies collected</span></div></div></section>
     ${recRels.length ? `<div class="row-head"><h2>Jump back in</h2></div><div class="grid">${recRels.map(relCard).join("")}</div>` : ""}
     <div class="row-head"><h2>Latest releases</h2><span class="muted">${plural(RELEASES.length, "release")}</span></div>
     <div class="chips" id="genres"><button class="chip on" data-g="">All</button>${genres.map(g => `<button class="chip" data-g="${esc(g)}">${esc(g)}</button>`).join("")}</div>
     <div class="grid" id="latest">${RELEASES.map(relCard).join("")}</div>
     <div class="two" style="margin-top:34px">
-      <div><h2>Most minted</h2>${most.map((r, i) => `<a class="rank-row" href="#/release/${enc(r.key)}"><span class="k">${i + 1}</span><img loading="lazy" src="${esc(ipfs(r.img))}" alt=""><span><b>${esc(r.title)}</b><br><span class="muted small">${esc(r.artist)}</span></span><span class="muted small">${plural(relCollected(r), "copy", "copies")}</span></a>`).join("")}</div>
-      <div><h2>Just collected</h2><div id="feed"><span class="muted">Reading the chain…</span></div></div>
+      <div><h2>Most collected</h2>${most.map((r, i) => `<a class="rank-row" href="#/release/${enc(r.key)}"><span class="k">${i + 1}</span><img loading="lazy" src="${esc(ipfs(r.img))}" alt=""><span><b>${esc(r.title)}</b><br><span class="muted small">${esc(r.artist)}</span></span><span class="muted small">${plural(relCollected(r), "copy", "copies")}</span></a>`).join("")}</div>
+      <div><h2>Just collected</h2><div id="feed"><span class="muted">Loading…</span></div></div>
     </div>
     <div class="row-head"><h2>Artists to discover</h2><a class="muted" href="#/artists">All artists</a></div>
     <div class="grid">${rising.map(artistCard).join("")}</div>
-    ${typeof radioStations === "function" ? `<div class="row-head"><h2>Splendor Radio</h2><a class="muted" href="#/radio">Free listening, open rules →</a></div><div class="grid">${radioStations().slice(0, 4).map(stationCard).join("")}</div>` : ""}
+    ${typeof radioStations === "function" ? `<div class="row-head"><h2>Splendor Radio</h2><a class="muted" href="#/radio">Free listening →</a></div><div class="grid">${radioStations().slice(0, 4).map(stationCard).join("")}</div>` : ""}
     <a class="econ-banner" href="#/playlists"><div><div class="eyebrow">For curators</div><h2>Good taste pays</h2><div class="muted">Build playlists, answer the weekly brief, and earn when listeners collect the songs you found.</div></div><span class="btn">Become a curator</span></a>
     <div class="foot">Splendor Music · concept and product design by Lachlan Grant Splendor · live data from the XPR Network · <a href="#/trust" style="color:var(--accent)">Trust &amp; safety</a></div>`;
   $$("#genres [data-g]").forEach(b => b.onclick = () => {
@@ -591,7 +591,7 @@ async function feed(el) {
       if (!t || !a.owner || seen.has(k)) continue; seen.add(k); rows.push({ a, t }); if (rows.length >= 7) break;
     }
     if (!el.isConnected) return;
-    el.innerHTML = rows.map(({ a, t }) => `<div class="feed-row">${av(a.owner, "md")}<div>${acctLink(a.owner)} collected <a href="#/passport/${enc(t.id)}"><b>${esc(t.title)}</b></a><br><span class="muted small">${esc(t.artist)} · #${esc(a.template_mint)} · ${ago(+a.minted_at_time)}</span></div><img src="${esc(ipfs(t.img))}" alt=""></div>`).join("") || `<span class="muted">No collects yet.</span>`;
+    el.innerHTML = rows.map(({ a, t }) => `<div class="feed-row">${av(a.owner, "md")}<div>${artistNameFor(a.owner) ? `<a href="#/artist/${enc(artistNameFor(a.owner))}">${esc(artistNameFor(a.owner))}</a>` : acctLink(a.owner)} collected <a href="#/passport/${enc(t.id)}"><b>${esc(t.title)}</b></a><br><span class="muted small">${esc(t.artist)} · #${esc(a.template_mint)} · ${ago(+a.minted_at_time)}</span></div><img src="${esc(ipfs(t.img))}" alt=""></div>`).join("") || `<span class="muted">No collects yet.</span>`;
     hydrate(el);
   } catch { if (el.isConnected) el.innerHTML = `<span class="muted">Couldn't reach the chain right now.</span>`; }
 }
@@ -610,7 +610,9 @@ function search(q) {
 }
 
 function artists() {
-  view().innerHTML = `<div class="row-head" style="margin-top:0"><h1 style="margin:0">Artists</h1><span class="muted">${ARTISTS.length} on the network</span></div><div class="grid">${ARTISTS.map(artistCard).join("")}</div>`;
+  view().innerHTML = `<div class="row-head" style="margin-top:0"><h1 style="margin:0">Artists</h1><span class="muted">${ARTISTS.length} artists</span></div>
+    <a class="artist-door" href="#/for-artists"><span><b>Are you an artist?</b> Your page here is free, forever: music, lyrics, videos and links, and you get paid the moment a fan collects.</span><span class="btn sm">See how</span></a>
+    <div class="grid">${ARTISTS.map(artistCard).join("")}</div>`;
 }
 /* ---------- artist profiles: profiles.js + the artist's own edits on this device ---------- */
 function profileOf(name) {
@@ -644,8 +646,16 @@ function artist(name) {
   const banner = imgUrl(p.banner), avatar = imgUrl(p.avatar) || ipfs(a.img);
   const links = Object.entries(p.links || {}).map(([k, u]) => [k, safeHref(u)]).filter(([, u]) => u);
   const g = genresOf(a), fans = ARTISTS.filter(x => x !== a && [...genresOf(x)].some(y => g.has(y))).slice(0, 6);
-  const notYet = (p.notYet || []).filter(e => e && e.title), asks = store.get("asks", []), askKey = e => a.name + "|" + e.title;
-  const videos = (p.videos || []).map(v => ({ id: String(v.id || "").match(/^[\w-]{11}$/)?.[0], title: String(v.title || "") })).filter(v => v.id);
+  const norm = x => String(x || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const here = new Set(all.map(t => norm(t.title)));                           // songs already on Splendor Music
+  const nyAll = (p.notYet || []).filter(e => e && e.title).map(e => ({ ...e, left: (e.tracks || []).filter(x => !here.has(norm(x))) }))
+    .filter(e => !(e.tracks || []).length || e.left.length);                   // fully minted elsewhere = gone
+  // a single or EP whose songs are all on a bigger release here folds into it ("includes ...")
+  const notYet = nyAll.filter(e => !nyAll.some(o => o !== e && (o.left || []).length > (e.left || []).length && (e.left || []).length && e.left.every(x => o.left.map(norm).includes(norm(x)))))
+    .map(e => ({ ...e, inc: nyAll.filter(o => o !== e && (o.left || []).length && (o.left || []).length < (e.left || []).length && o.left.every(x => e.left.map(norm).includes(norm(x)))).map(o => o.title) }));
+  const asks = store.get("asks", []), askKey = (e, song) => a.name + "|" + e.title + (song ? "|" + song : "");
+  const videos = (p.videos || []).map(v => ({ id: String(v.id || "").match(/^[\w-]{11}$/)?.[0], title: String(v.title || ""), kind: String(v.kind || "") })).filter(v => v.id).slice(0, 24);
+  const vidCard = v => `<button class="vid" data-yt="${esc(v.id)}" title="${esc(v.title)}"><img loading="lazy" src="https://i.ytimg.com/vi/${esc(v.id)}/hqdefault.jpg" alt=""><span class="vplay">&#9654;</span><span class="vt">${esc(v.title)}${v.kind ? `<small>${esc(v.kind)}</small>` : ""}</span></button>`;
   const social = links.filter(([k]) => !(typeof STREAMING !== "undefined" ? STREAMING : []).includes(k)), streaming = links.filter(([k]) => (typeof STREAMING !== "undefined" ? STREAMING : []).includes(k));
   const card = (r, label) => `<a class="pick-card" href="#/release/${enc(r.key)}"><img src="${esc(ipfs(r.img))}" alt=""><span><span class="eyebrow">${label}</span><b>${esc(r.title)}</b><small>${relKind(r)} · ${esc(relYear(r))} · ${plural(r.tracks.length, "song")}</small>${label === "Artist Pick" && p.pick?.note ? `<em>“${esc(p.pick.note)}”</em>` : ""}</span></a>`;
   const discCards = k => [
@@ -657,7 +667,7 @@ function artist(name) {
       <div class="ah-txt"><div class="eyebrow">Artist${p.bio ? " · page by the artist" : ""}</div>
         <h1 class="ah-name">${esc(a.name)}</h1>
         ${p.tagline || p.location ? `<div class="ah-tag">${esc([p.tagline, p.location].filter(Boolean).join(" · "))}</div>` : ""}
-        <div class="ah-stats"><span><b>${songCount(a)}</b> songs</span><span><b>${a.releases.length}</b> on chain</span><span><b>${a.collected.toLocaleString()}</b> collected</span>${vrPlays ? `<span><b>${vrPlays.toLocaleString()}</b> Vibrr Radio plays</span>` : ""}</div></div></div>
+        <div class="ah-stats"><span><b>${songCount(a)}</b> songs</span><span><b>${a.releases.length}</b> releases</span><span><b>${a.collected.toLocaleString()}</b> collected</span>${vrPlays ? `<span><b>${vrPlays.toLocaleString()}</b> Vibrr Radio plays</span>` : ""}</div></div></div>
     ${banner && p.photoCredit ? `<span class="ah-credit">${esc(p.photoCredit)}</span>` : ""}
   </section>
   <div class="actions ah-actions"><button class="btn big" id="play-artist">&#9654; Play</button><button class="btn ghost" id="shuf-artist">&#8644; Shuffle</button>
@@ -676,9 +686,13 @@ function artist(name) {
   <div class="row-head" id="discography"><h2>Discography</h2></div>
   <div class="chips" id="disc-chips"><button class="chip on" data-k="">All</button>${["Album", "EP", "Single"].filter(k => rels.some(r => relKind(r) === k)).map(k => `<button class="chip" data-k="${k}">${k === "Album" ? "Albums" : k === "EP" ? "EPs" : "Singles"}</button>`).join("")}</div>
   <div class="grid" id="disc">${discCards("")}</div>
-  ${notYet.length ? `<div class="row-head" id="notyet"><div><h2>Not on Splendor Music yet</h2><div class="muted small">Out on streaming, waiting to be minted. Ask for the ones you'd collect: it tells ${esc(a.name)} what to mint next.</div></div></div>
-  <div class="notyet">${notYet.map(e => { const on = asks.includes(askKey(e)); return `<div class="ny"><img loading="lazy" src="${esc(imgUrl(e.img))}" alt=""><span class="ny-t"><b>${esc(e.title)}</b><small>${esc(e.type || "Release")} · ${esc(String(e.released || "").slice(0, 4))}</small></span><button class="btn ${on ? "ghost on" : "ghost"} sm" data-ask="${esc(askKey(e))}">${on ? "✓ Asked" : "Ask for it"}</button></div>`; }).join("")}</div>` : ""}
-  ${videos.length ? `<div class="row-head" id="videos"><h2>Videos</h2></div><div class="videos">${videos.map(v => `<button class="vid" data-yt="${esc(v.id)}" title="${esc(v.title)}"><img loading="lazy" src="https://i.ytimg.com/vi/${esc(v.id)}/hqdefault.jpg" alt=""><span class="vplay">&#9654;</span><span class="vt">${esc(v.title)}</span></button>`).join("")}</div>` : ""}
+  ${notYet.length ? `<div class="row-head" id="notyet"><div><h2>Not on Splendor Music yet</h2><div class="muted small">Out on streaming services. Ask for the ones you'd love to own here: it tells ${esc(a.name)} what to bring over next.</div></div></div>
+  <div class="notyet">${notYet.map(e => { const on = asks.includes(askKey(e)), songs = e.left || [];
+    return `<div class="ny-wrap"><div class="ny"><img loading="lazy" src="${esc(imgUrl(e.img))}" alt=""><span class="ny-t"><b>${esc(e.title)}</b><small>${esc(e.type || "Release")} · ${esc(String(e.released || "").slice(0, 4))}${songs.length > 1 ? ` · ${songs.length} songs` : ""}</small>${e.inc.length ? `<small class="ny-inc">Includes ${esc(e.inc.join(", "))}</small>` : ""}</span>
+      <button class="btn ${on ? "ghost on" : "ghost"} sm" data-ask="${esc(askKey(e))}">${on ? "✓ Asked" : "Ask for it"}</button></div>
+      ${songs.length > 1 ? `<details class="ny-songs"><summary>Or ask for one song</summary>${songs.map(x => { const k = askKey(e, x), o2 = asks.includes(k); return `<div class="ny-song"><span>${esc(x)}</span><button class="btn ghost sm${o2 ? " on" : ""}" data-ask="${esc(k)}">${o2 ? "✓ Asked" : "Ask"}</button></div>`; }).join("")}</details>` : ""}</div>`; }).join("")}</div>` : ""}
+  ${videos.length ? `<div class="row-head" id="videos"><h2>Videos</h2>${videos.length > 4 ? `<span class="muted small">${videos.length} videos</span>` : ""}</div><div class="videos" id="vids">${videos.slice(0, 4).map(vidCard).join("")}</div>
+    ${videos.length > 4 ? `<button class="btn ghost sm" id="vids-more" style="margin-top:14px">Show all ${videos.length} videos</button>` : ""}` : ""}
   <div class="row-head" id="about"><h2>About</h2></div>
   <div class="about-grid">
     <div class="panel about-main">
@@ -688,9 +702,9 @@ function artist(name) {
       ${social.length ? `<div class="sub-h" style="margin-top:18px">Follow</div><div class="lpills" id="ab-links">${linkPills(social)}</div>` : `<div class="lpills" id="ab-links"></div>`}
       ${streaming.length ? `<div class="sub-h" style="margin-top:14px">Also on</div><div class="lpills">${linkPills(streaming)}</div>` : ""}</div>
     <div class="panel"><h3 style="margin-top:0">Support ${esc(a.name)}</h3>
-      <p class="muted" style="margin-top:0">Collect a song and the artist is paid in the same transaction, through the split on their Music Passport. No middleman takes a cut, and you keep the song.</p>
+      <p class="muted" style="margin-top:0">Collect a song and ${esc(a.name)} is paid straight away. You keep the song, and nobody in the middle takes a cut.</p>
       <a class="btn" target="_blank" rel="noopener" href="https://vibrr.ai/vibrr-market/collection/${enc(rels[0]?.collection || "")}">Collect on Vibrr ↗</a>
-      <div class="sub-h" style="margin-top:20px">On chain as</div><div class="supporters">${[...a.accounts].map(acc => supChip(acc)).join("")}</div></div>
+      <div class="muted small" id="ah-verified" style="margin-top:16px"></div></div>
   </div>
   ${fans.length ? `<div class="row-head" id="fans"><h2>Fans also like</h2></div><div class="grid">${fans.map(artistCard).join("")}</div>` : ""}`;
   $("#play-artist").onclick = () => playQueue(popular.length ? popular.concat(all.filter(t => !popular.includes(t))) : all, 0, a.name);
@@ -699,15 +713,29 @@ function artist(name) {
   $("#share-artist").onclick = () => shareModal(`${a.name} on Splendor Music`, location.href);
   if ($("#edit-artist")) $("#edit-artist").onclick = () => editArtist(a.name);
   $$("[data-ask]").forEach(b => b.onclick = () => { const k = b.dataset.ask, l = store.get("asks", []), on = l.includes(k); store.set("asks", on ? l.filter(x => x !== k) : [...l, k]);
-    b.textContent = on ? "Ask for it" : "✓ Asked"; b.classList.toggle("on", !on); if (!on) toast(`Asked ${a.name} to mint “${k.split("|")[1]}”. Prototype: artists see asks once profiles are live on Vibrr.`); });
-  $$("[data-yt]").forEach(b => b.onclick = () => { P.audio?.pause(); const f = document.createElement("iframe"); f.className = "vid-frame"; f.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen"; f.allowFullscreen = true;
+    const label = b.closest(".ny-song") ? "Ask" : "Ask for it"; b.textContent = on ? label : "✓ Asked"; b.classList.toggle("on", !on);
+    if (!on) toast(`Asked ${a.name} for “${k.split("|").slice(2).join("") || k.split("|")[1]}”. They'll see how many fans asked.`); });
+  const bindVids = () => $$("[data-yt]").forEach(b => b.onclick = () => { P.audio?.pause(); const f = document.createElement("iframe"); f.className = "vid-frame"; f.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen"; f.allowFullscreen = true;
     f.src = `https://www.youtube-nocookie.com/embed/${b.dataset.yt}?autoplay=1&rel=0`; b.replaceWith(f); });
+  bindVids();
+  if ($("#vids-more")) $("#vids-more").onclick = e => { $("#vids").innerHTML = videos.map(vidCard).join(""); e.target.hidden = true; bindVids(); };
+  verifiedBadge(a);
   if ($("#pop-more")) $("#pop-more").onclick = e => { $("#pop-list").innerHTML = popular.map((t, i) => trackRow(t, i, { thumb: 1, meta: popMeta })).join(""); e.target.remove(); markPlaying(); };
   $$("#disc-chips [data-k]").forEach(b => b.onclick = () => { $$("#disc-chips .chip").forEach(c => c.classList.toggle("on", c === b)); $("#disc").innerHTML = discCards(b.dataset.k); });
   $$(".subtabs [data-jump]").forEach(b => b.onclick = () => { $$(".subtabs button").forEach(x => x.classList.toggle("on", x === b)); $("#" + b.dataset.jump)?.scrollIntoView({ behavior: "smooth", block: "start" }); });
   setAmbient(p.banner ? null : a.img);
   hydrate(view());
   if (!links.length) chainSocials(a);
+}
+/* "ID-verified artist": the XPR account behind the music passed identity checks (KYC). Wallet names stay private. */
+async function verifiedBadge(a) {
+  for (const acc of [...a.accounts].slice(0, 4)) {
+    try {
+      const r = await fetch(`${RPC}/v1/chain/get_table_rows`, { method: "POST", body: JSON.stringify({ json: true, code: "eosio.proton", scope: "eosio.proton", table: "usersinfo", lower_bound: acc, upper_bound: acc, limit: 1 }) });
+      const row = (await r.json()).rows?.[0];
+      if (row && Array.isArray(row.kyc) ? row.kyc.length : (row && String(row.kyc || "").length > 2)) { const el = $("#ah-verified"); if (el) el.innerHTML = `<span class="pill ok">✓ ID-verified artist</span> The identity behind this music has been checked.`; return; }
+    } catch {}
+  }
 }
 /* artists without a profile yet: show the socials they put in their Vibrr collection on chain */
 async function chainSocials(a) {
@@ -835,7 +863,7 @@ async function release(key) {
     <img class="cover" src="${esc(ipfs(r.img))}" alt="">
     <div>
       <div class="eyebrow">Release</div><h1>${esc(r.title)}</h1>
-      <div style="margin-bottom:12px"><a href="#/artist/${enc(r.artist)}"><b>${esc(r.artist)}</b></a> <span class="muted">${r.released ? `· released ${esc(relDate(r.released))} ` : ""}· ${plural(r.tracks.length, "song")} · ${relCollected(r).toLocaleString()} minted</span></div>
+      <div style="margin-bottom:12px"><a href="#/artist/${enc(r.artist)}"><b>${esc(r.artist)}</b></a> <span class="muted">${r.released ? `· released ${esc(relDate(r.released))} ` : ""}· ${plural(r.tracks.length, "song")} · ${relCollected(r).toLocaleString()} collected</span></div>
       <div>${[d.genre, d.mood, d.language].filter(Boolean).map(x => `<span class="pill">${esc(String(x).replace(/\|/g, " · "))}</span>`).join("")}
         <span class="pill hot">${edition(t0)}</span>${price ? `<span class="pill">${price}</span>` : ""}${d.explicit === true || d.explicit === 1 || d.explicit === "true" ? `<span class="pill">Explicit</span>` : ""}</div>
       <div class="actions">
@@ -845,8 +873,8 @@ async function release(key) {
         <button class="btn ghost" id="share">Share</button>
         <a class="btn ghost" href="https://vibrr.ai/vibrr-market/collection/${enc(r.collection)}" target="_blank" rel="noopener">Collect on Vibrr ↗</a>
       </div>
-      ${listHead("Edition")}<div class="tracks" data-list="rel">${r.tracks.map((t, i) => trackRow(t, i, { meta: x => `${edition(x)} · ${x.issued} minted` })).join("")}</div>
-      <h3 style="margin-top:26px">Supported by</h3><div class="supporters" id="sup"><span class="muted">Checking the chain…</span></div>
+      ${listHead("Edition")}<div class="tracks" data-list="rel">${r.tracks.map((t, i) => trackRow(t, i, { meta: x => `${x.issued} collected` })).join("")}</div>
+      <h3 style="margin-top:26px">Supported by</h3><div class="supporters" id="sup"><span class="muted">Loading…</span></div>
       ${d.about ? `<div class="about">${esc(d.about)}</div>` : ""}
       <div style="margin-top:16px">${[["Spotify", d.spotify], ["YouTube", d.youtube], ["Bandcamp", d.link]].filter(x => /^https?:\/\//.test(x[1] || "")).map(([n, u]) => `<a class="pill" target="_blank" rel="noopener" href="${esc(u)}">${n} ↗</a>`).join("")}</div>
     </div></section>`;
@@ -863,7 +891,7 @@ async function release(key) {
   } catch { if ($("#sup")) $("#sup").innerHTML = `<span class="muted">Couldn't reach the chain right now.</span>`; return; }
   const el = $("#sup"); if (!el) return;
   const list = [...counts.entries()].sort((a, b) => b[1] - a[1]);
-  el.innerHTML = list.length ? list.slice(0, 40).map(([acc, n]) => supChip(acc, n > 1 ? ` <span class="muted">×${n}</span>` : "")).join("") + (list.length > 40 ? `<span class="muted">+${list.length - 40} more</span>` : "")
+  el.innerHTML = list.length ? list.slice(0, 40).map(([acc, n]) => personChip(acc, n > 1 ? ` <span class="muted">×${n}</span>` : "")).join("") + (list.length > 40 ? `<span class="muted">+${list.length - 40} more</span>` : "")
     : `<span class="muted">No collectors yet. Be the first.</span>`;
   hydrate(el);
 }
@@ -908,16 +936,24 @@ function payShares(t) {
   if (sp) {
     const roy = sp.royalty_bps / 100, m = new Map();
     const add = (who, pct, role) => { const x = m.get(who) || { who, pct: 0, roles: [] }; x.pct += pct; if (!x.roles.includes(role)) x.roles.push(role); m.set(who, x); };
-    add(sp.artist, 100 - roy, "Primary sale");
-    sp.wallets.forEach((w, i) => add(w, roy * (sp.bps[i] || 0) / 10000, `Royalty split ${((sp.bps[i] || 0) / 100).toFixed(0)}% of ${roy}%`));
+    add(sp.artist, 100 - roy, "Artist");
+    sp.wallets.forEach((w, i) => add(w, roy * (sp.bps[i] || 0) / 10000, "Collaborator share"));
     return { src: "chain", sp, legs: [...m.values()] };
   }
   const c = contribs(t.d).filter(x => +x.s > 0);
   if (c.length) return { src: "declared", legs: c.map(x => ({ who: x.w, pct: +x.s, roles: [x.r || "Contributor"] })) };
-  return { src: "owner", legs: [{ who: t.author, pct: 100, roles: ["Collection owner"] }] };
+  return { src: "owner", legs: [{ who: t.author, pct: 100, roles: ["Artist"] }] };
 }
-const splitBar = legs => `<div class="splitbar">${legs.map((l, i) => `<span style="width:${Math.max(0, l.pct)}%;background:${COLORS[i % COLORS.length]}" title="${esc(l.who)} ${l.pct.toFixed(1)}%"></span>`).join("")}</div>`;
-const legRows = (legs, price, cur) => `<div class="legs">${legs.map((l, i) => `<div class="leg"><span class="sw" style="background:${COLORS[i % COLORS.length]}"></span>${supChip(l.who)}<span class="r">${esc(l.roles.join(" + "))}</span><b>${l.pct.toFixed(l.pct % 1 ? 1 : 0)}%${price ? ` · ${num(price * l.pct / 100)} ${esc(cur)}` : ""}</b></div>`).join("")}</div>`;
+const splitBar = legs => `<div class="splitbar">${legs.map((l, i) => `<span style="width:${Math.max(0, l.pct)}%;background:${COLORS[i % COLORS.length]}" title="${esc(personName(l.who))} ${l.pct.toFixed(1)}%"></span>`).join("")}</div>`;
+/* privacy by default: wallets that belong to an artist show as the artist's name (wallet names only in Technical details) */
+function artistNameFor(acc) { for (const a of ARTISTS) if (a.accounts.has(acc)) return a.name; return ""; }
+const personChip = (acc, extra = "") => {
+  const n = artistNameFor(acc); if (!n) return supChip(acc, extra);
+  const pic = imgUrl(profileOf(n).avatar);
+  return `<a class="sup" href="#/artist/${enc(n)}"><span class="av" style="--h:${hue(n)}">${pic ? `<img src="${esc(pic)}" alt="">` : esc(n[0])}</span>${esc(n)}${extra}</a>`;
+};
+const personName = acc => artistNameFor(acc) || acc;
+const legRows = (legs, price, cur) => `<div class="legs">${legs.map((l, i) => `<div class="leg"><span class="sw" style="background:${COLORS[i % COLORS.length]}"></span>${personChip(l.who)}<span class="r">${esc(l.roles.join(" + "))}</span><b>${l.pct.toFixed(l.pct % 1 ? 1 : 0)}%${price ? ` · ${num(price * l.pct / 100)} ${esc(cur)}` : ""}</b></div>`).join("")}</div>`;
 
 async function passportPage(id) {
   const t = byId.get(String(id)); if (!t) return notFound();
@@ -931,16 +967,15 @@ async function passportPage(id) {
   <section class="pass-card">
     <div class="pass-art"><img id="pass-img" src="${esc(ipfs(t.img))}" alt="">${d.backimg ? `<button class="flip" id="flip">↻ Flip artwork</button>` : ""}</div>
     <div class="pass-main">
-      <div class="eyebrow mono">Music Passport · XPR Network</div>
+      <div class="eyebrow">Music Passport</div>
       <h1>${esc(t.title)}</h1>
       <div class="by"><a href="#/artist/${enc(t.artist)}"><b>${esc(t.artist)}</b></a> · <a class="muted" href="#/release/${enc(t.key)}">${esc(t.release)}</a></div>
       <div class="pass-fields">
         <div class="pf"><div class="k">℗ Recording owner</div><div class="v big">${esc(pl.who || "Not declared")}</div></div>
         <div class="pf"><div class="k">© Song owner</div><div class="v big">${esc(cl.who || "Not declared")}</div></div>
-        <div class="pf"><div class="k">ISRC</div><div class="v mono">${esc(d.isrc || "—")}</div></div>
         <div class="pf"><div class="k">Edition</div><div class="v">${edition(t)}</div></div>
-        <div class="pf"><div class="k">Copies</div><div class="v" id="pf-live">${plural(t.issued, "copy", "copies")} minted</div></div>
-        <div class="pf"><div class="k">Issued</div><div class="v">${date(t.created)}</div></div>
+        <div class="pf"><div class="k">Collected</div><div class="v" id="pf-live">${plural(t.issued, "copy", "copies")}</div></div>
+        <div class="pf"><div class="k">Added</div><div class="v">${date(t.created)}</div></div>
         ${VR.byId.has(t.id) ? `<div class="pf"><div class="k">Vibrr Radio</div><div class="v">${plural(VR.byId.get(t.id).plays, "play")} · ${plural(VR.byId.get(t.id).reacts, "reaction")}</div></div>` : ""}
       </div>
       <div class="actions" data-list="pass">
@@ -964,23 +999,24 @@ async function passportPage(id) {
     </div>
     <div class="panel"><h2>Who made it</h2>
       ${credits.length ? `<div class="credits">${credits.map(c => `<div class="role">${esc(c.role || "Credit")}</div><div class="who">${esc(c.who)}</div>`).join("")}</div>` : `<p class="muted">No credits listed yet.</p>`}
-      ${con.length ? `<div class="sub-h" style="margin-top:18px">On-chain contributors</div><div class="contribs">${con.map(c => `<a class="contrib" href="#/u/${enc(c.w)}">${av(c.w, "md")}<span class="meta"><b data-pname="${esc(c.w)}" data-tick>${esc(c.w)}</b><small>@${esc(c.w)} · ${esc(c.r || "Contributor")}${c.s ? ` · ${esc(c.s)}%` : ""}</small></span></a>`).join("")}</div>` : ""}
     </div>
-    <div class="panel wide"><h2>Who gets paid <span class="n">public ledger</span></h2><div id="paid"><span class="muted">Reading the split contract…</span></div></div>
+    ${(() => { const L = lyricsOf(t), own = isArtistOwner(artistOf(t)); return `<div class="panel wide lyrics-panel" id="lyrics"><h2>Lyrics</h2>${L.lyrics ? `<div class="lyrics">${esc(L.lyrics)}</div>` : `<p class="muted" style="margin:0">No lyrics yet. When ${esc(t.artist)} adds them, they show here and in Now Playing.</p>`}
+      ${L.story ? `<h3 style="margin-top:20px">The story behind the song</h3><div class="about" style="margin-top:6px">${esc(L.story)}</div>` : ""}${own ? `<button class="btn ghost sm" style="margin-top:14px" data-editlyrics="${esc(t.id)}">✎ ${L.lyrics ? "Edit" : "Add"} lyrics and story</button>` : ""}</div>`; })()}
+    ${d.about ? `<div class="panel wide"><h2>About</h2><div class="about" style="margin:0">${esc(d.about)}</div></div>` : ""}
+    <div class="panel wide"><h2>How each sale is shared</h2><div id="paid"><span class="muted">Checking…</span></div></div>
     <div class="panel"><h2>What you can do with it</h2>
       ${perms.length ? `<div class="perms">${perms.map(([n, k, s]) => `<div class="perm ${yes(d[k]) ? "y" : "n"}"><span class="i">${yes(d[k]) ? "✓" : "✕"}</span><span><b>${n}</b><small>${s} · ${yes(d[k]) ? "allowed" : "ask the owner first"}</small></span></div>`).join("")}</div>` : `<p class="muted">The artist hasn't set permissions yet.</p>`}
     </div>
-    <div class="panel"><h2>Identifiers</h2><div class="kv">
-      ${kv("ISRC", d.isrc, 1)}${kv("UPC", d.upc, 1)}${kv("Template", t.id, 1)}${kv("Collection", t.collection, 1)}${kv("Schema", t.schema)}
+    <details class="panel wide tech"><summary>Technical details <span class="muted small">codes, files and wallets, for the curious</span></summary><div class="kv" style="margin-top:14px">
+      ${kv("ISRC", d.isrc, 1)}${kv("UPC", d.upc, 1)}${kv("Template", t.id, 1)}${kv("Collection", t.collection, 1)}${kv("Schema", t.schema)}${kv("Created by wallet", t.author)}
+      ${con.length ? `<div class="k">On-chain contributors</div><div class="v">${con.map(c => `${esc(c.w)} (${esc(c.r || "Contributor")}${c.s ? ` ${esc(c.s)}%` : ""})`).join(", ")}</div>` : ""}
       ${kv("Genre", d.genre && String(d.genre).replace(/\|/g, " · "))}${kv("Mood", d.mood && String(d.mood).replace(/\|/g, " · "))}${kv("BPM", d.bpm)}${kv("Key", d.key)}${kv("Language", d.language)}${kv("Format", d.format)}
       ${kv("Track", d.track)}${kv("Released", d.released && relDate(d.released))}
       ${cidLink("Audio (master)", d.audio)}${cidLink("Listening copy", d.listen)}${cidLink("Artwork", d.img)}${cidLink("Video", d.video)}
       <div class="k">Raw record</div><div class="v"><a class="mono" target="_blank" rel="noopener" href="${API}/templates/${enc(t.collection)}/${enc(t.id)}">template ${esc(t.id)} ↗</a></div>
-    </div></div>
-    <div class="panel wide"><h2>Collectors</h2><div id="collectors"><span class="muted">Checking the chain…</span></div></div>
-    ${(() => { const L = lyricsOf(t), own = isArtistOwner(artistOf(t)); return `<div class="panel wide lyrics-panel" id="lyrics"><h2>Lyrics</h2>${L.lyrics ? `<div class="lyrics">${esc(L.lyrics)}</div>` : `<p class="muted" style="margin:0">No lyrics yet. When ${esc(t.artist)} adds them, they show here and in Now Playing.</p>`}
-      ${L.story ? `<h3 style="margin-top:20px">The story behind the song</h3><div class="about" style="margin-top:6px">${esc(L.story)}</div>` : ""}${own ? `<button class="btn ghost sm" style="margin-top:14px" data-editlyrics="${esc(t.id)}">✎ ${L.lyrics ? "Edit" : "Add"} lyrics and story</button>` : ""}</div>`; })()}
-    ${d.about ? `<div class="panel wide"><h2>About</h2><div class="about" style="margin:0">${esc(d.about)}</div></div>` : ""}
+    </div></details>
+    <div class="panel wide"><h2>Collectors</h2><div id="collectors"><span class="muted">Loading…</span></div></div>
+
   </section>`;
   if (d.backimg) { let back = false; $("#flip").onclick = () => { back = !back; $("#pass-img").src = ipfs(back ? d.backimg : t.img); }; }
   $("#share-pass").onclick = () => shareModal(`${t.title} by ${t.artist}: Music Passport`, location.href);
@@ -1000,26 +1036,26 @@ function renderPaid(t) {
   const d = t.d, price = +d.sale_price || 0, cur = d.sale_currency || "XPR", ps = payShares(t);
   const col = (CHAIN.collects.get(t.id) || []).slice().sort((a, b) => b.time - a.time), res = (CHAIN.resales.get(t.id) || []).slice().sort((a, b) => b.time - a.time);
   const tot = new Map(); col.forEach(c => c.outs.forEach(o => tot.set(o.q.sym, (tot.get(o.q.sym) || 0) + o.q.n)));
-  const head = ps.src === "chain" ? `Every collect is split by Vibrr's contract <span class="pill ok">✓ registered on chain ${date(ps.sp.time)}</span>`
-    : ps.src === "declared" ? `Split declared in the Passport <span class="pill">not yet registered with the split contract</span>`
-    : `No split registered yet <span class="pill">sales go to the collection owner</span>`;
+  const head = ps.src === "chain" ? `Every collect pays these people automatically <span class="pill ok">✓ locked in since ${date(ps.sp.time)}</span>`
+    : ps.src === "declared" ? `The shares the artist has listed <span class="pill">not locked in yet</span>`
+    : `No shares set yet <span class="pill">sales go to the artist</span>`;
   const declared = contribs(d), showDeclared = ps.src === "chain" && declared.some(c => !ps.legs.find(l => l.who === c.w));
   el.innerHTML = `
     <div class="sub-h">${head}</div>
     ${splitBar(ps.legs)}${legRows(ps.legs, price, cur)}
     ${price ? `<p class="muted small">Shown for a collect at the listed price of ${num(price)} ${esc(cur)}.</p>` : ""}
     ${showDeclared ? `<p class="muted small">The Passport also credits ${declared.filter(c => !ps.legs.find(l => l.who === c.w)).map(c => esc(c.w)).join(", ")}; the on-chain split above is what actually pays out.</p>` : ""}
-    ${t.fee ? `<div class="sub-h">On every resale</div><p style="margin:0"><b>${num(t.fee * 100)}%</b> of the resale price goes back to ${acctLink(t.author)} (collection royalty, enforced by the marketplace).</p>` : ""}
-    <div class="sub-h">Payment history</div>
+    ${t.fee ? `<div class="sub-h">On every resale</div><p style="margin:0"><b>${num(t.fee * 100)}%</b> of the resale price goes back to ${personChip(t.author)}.</p>` : ""}
+    <details class="tech-d"><summary>Payment history (${col.length + res.length})</summary>
     ${tot.size || res.length ? `<div class="totals">${[...tot.entries()].map(([s, n]) => `<div class="stat"><b>${num(n)} ${esc(s)}</b><span>paid to creators through the split contract</span></div>`).join("")}${col.length ? `<div class="stat"><b>${col.length}</b><span>paid collect${col.length === 1 ? "" : "s"}</span></div>` : ""}${res.length ? `<div class="stat"><b>${res.length}</b><span>resale${res.length === 1 ? "" : "s"}</span></div>` : ""}</div>` : ""}
     <div class="ledger">
       ${col.map(c => `<div class="lrow"><span class="when">${date(c.time)}</span><div class="what"><div>${acctLink(c.buyer)} collected a copy for <b>${num(c.paid.n)} ${esc(c.paid.sym)}</b></div>
-        <div class="payouts">${c.outs.map(o => `<span class="payout">${esc(o.acc)} +${num(o.q.n)} ${esc(o.q.sym)}</span>`).join("")}</div></div>
+        <div class="payouts">${c.outs.map(o => `<span class="payout">${esc(personName(o.acc))} +${num(o.q.n)} ${esc(o.q.sym)}</span>`).join("")}</div></div>
         <a class="pill" target="_blank" rel="noopener" href="${EXPLORER}/transaction/${enc(c.trx)}">tx ↗</a></div>`).join("")}
       ${res.map(s => `<div class="lrow"><span class="when">${date(s.time)}</span><div class="what"><div>${acctLink(s.seller)} resold #${esc(s.mint)} to ${acctLink(s.buyer)} for <b>${num(s.amount)} ${esc(s.sym)}</b>${s.bundle > 1 ? ` <span class="muted small">(bundle of ${s.bundle})</span>` : ""}</div>
-        ${s.fee ? `<div class="payouts"><span class="payout">${esc(t.author)} ≈ +${num(s.amount * s.fee)} ${esc(s.sym)} royalty</span></div>` : ""}</div><span class="pill">${esc(s.market || "market")}</span></div>`).join("")}
-      ${!col.length && !res.length ? `<div class="empty-state" style="margin:0"><b>No paid collects recorded yet</b>When this song is collected, every payout lands here: public, permanent, checkable by anyone.</div>` : ""}
-    </div>
+        ${s.fee ? `<div class="payouts"><span class="payout">${esc(personName(t.author))} ≈ +${num(s.amount * s.fee)} ${esc(s.sym)} royalty</span></div>` : ""}</div><span class="pill">${esc(s.market || "market")}</span></div>`).join("")}
+      ${!col.length && !res.length ? `<div class="empty-state" style="margin:0"><b>No paid collects yet</b>When this song is collected, every payment shows here, for anyone to check.</div>` : ""}
+    </div></details>
     ${CHAIN.ok ? "" : `<p class="err">Couldn't read the split contract's history right now.</p>`}`;
   hydrate(el);
 }
@@ -1027,8 +1063,8 @@ async function collectors(t) {
   try {
     const [first, acc] = await Promise.all([getJSON(`${API}/assets?template_id=${t.id}&collection_name=${enc(t.collection)}&sort=template_mint&order=asc&limit=10`), getJSON(`${API}/accounts?template_id=${t.id}&collection_name=${enc(t.collection)}&limit=100`)]);
     const box = $("#collectors"); if (!box) return;
-    box.innerHTML = first.length ? `<div class="sub-h">Early supporters</div><div class="supporters">${first.map(a => supChip(a.owner, ` <span class="mint">#${esc(a.template_mint)}</span>`)).join("")}</div>
-      <div class="sub-h">Everyone holding a copy (${acc.length}${acc.length === 100 ? "+" : ""})</div><div class="supporters">${acc.map(x => supChip(x.account, +x.assets > 1 ? ` <span class="muted">×${esc(x.assets)}</span>` : "")).join("")}</div>`
+    box.innerHTML = first.length ? `<div class="sub-h">Early supporters</div><div class="supporters">${first.map(a => personChip(a.owner, ` <span class="mint">#${esc(a.template_mint)}</span>`)).join("")}</div>
+      <div class="sub-h">Everyone holding a copy (${acc.length}${acc.length === 100 ? "+" : ""})</div><div class="supporters">${acc.map(x => personChip(x.account, +x.assets > 1 ? ` <span class="muted">×${esc(x.assets)}</span>` : "")).join("")}</div>`
       : `<span class="muted">No collectors yet. Be the first.</span>`;
     hydrate(box);
   } catch { const box = $("#collectors"); if (box) box.innerHTML = `<span class="muted">Couldn't reach the chain right now.</span>`; }
@@ -1502,7 +1538,7 @@ function briefScore(tracks, b = BRIEF) {
   const pass = typeof siPick === "function" ? tracks.reduce((s, t) => s + siPick(t).passport, 0) / n : .5;
   let adj = 0; for (let i = 1; i < n; i++) if (tracks[i].artist === tracks[i - 1].artist) adj++;
   const flow = n > 1 ? 1 - adj / (n - 1) : 1, size = n < b.min ? n / b.min : n > b.max ? b.max / n : 1, variety = Math.max(0, 1 - excess / n);
-  const parts = [["Fits the brief", fit, 30], ["Discovery", disc, 20], ["Variety", variety, 15], ["Length", size, 15], ["Flow", flow, 10], ["Passports", pass, 10]];
+  const parts = [["Fits the brief", fit, 30], ["Discovery", disc, 20], ["Variety", variety, 15], ["Length", size, 15], ["Flow", flow, 10], ["Song details", pass, 10]];
   const tips = [];
   if (n < b.min) tips.push(`Add ${b.min - n} more song${b.min - n === 1 ? "" : "s"} (${b.min} to ${b.max}).`); else if (n > b.max) tips.push(`Trim to ${b.max} songs.`);
   if (fit < .6) tips.push("More songs that feel like the brief: acoustic, warm, by-the-sea moods.");
@@ -1523,8 +1559,8 @@ function startBriefEntry() {
 }
 function briefRules() {
   modal(`<div class="m-head"><div><h3>How entries are judged</h3><div class="muted small">Brief #${BRIEF.no} · ${esc(BRIEF.title)}</div></div><button class="x" data-mclose>&times;</button></div>
-    <div class="m-body"><p style="margin:0">SI scores every entry with the same published rules. Money is never an input.</p>
-      <div class="legs">${[["Fits the brief", 30, "the songs' genres, moods and stories match the brief"], ["Discovery", 20, "artists still waiting to be found"], ["Variety", 15, `max ${BRIEF.perArtist} songs per artist`], ["Length", 15, `${BRIEF.min} to ${BRIEF.max} songs`], ["Flow", 10, "no back-to-back songs by the same artist (later: tempo, key and energy)"], ["Passports", 10, "credits, ISRC, owners, permissions, split on chain"]]
+    <div class="m-body"><p style="margin:0">Every entry is scored with the same published rules. Money is never part of it.</p>
+      <div class="legs">${[["Fits the brief", 30, "the songs' genres, moods and stories match the brief"], ["Discovery", 20, "artists still waiting to be found"], ["Variety", 15, `max ${BRIEF.perArtist} songs per artist`], ["Length", 15, `${BRIEF.min} to ${BRIEF.max} songs`], ["Flow", 10, "no back-to-back songs by the same artist (later: tempo, key and energy)"], ["Song details", 10, "credits, owners, permissions and pay shares filled in"]]
         .map(([k, w, s], i) => `<div class="leg"><span class="sw" style="background:${COLORS[i % COLORS.length]}"></span><b style="font-family:Inter;font-size:14px">${k}</b><span class="r">${s}</span><b>${w}%</b></div>`).join("")}</div>
       <p class="muted small" style="margin:0">Then real listening decides between the best: people who play the playlist through, save it, and collect from it. The top entries get a Featured spot for two weeks and a guest slot on a Splendor Radio station.</p></div>
     <div class="m-foot"><button class="btn" data-mclose>Got it</button></div>`);
@@ -1572,12 +1608,13 @@ function playlistsPage(focus) {
   <div class="row-head"><h2>How it works</h2></div>
   <div class="how3">
     <div class="panel"><h3>How playlists rise</h3><p class="muted" style="margin:0">Rankings use real listening: people who play your playlist through, save it, follow you, and collect songs from it. Finding artists early counts extra. Collecting through your own playlist, or the same accounts looping, doesn't count. Nobody can pay to move up.</p></div>
-    <div class="panel"><h3>Radio and Playlists</h3><p class="muted" style="margin:0">Splendor Radio is the editorial side: stations SI picks from music artists submit, like Spotify's own playlists. Playlists is where curators live: anyone can build, share and climb on their taste. Winning a brief puts your playlist on the radio too.</p></div>
+    <div class="panel"><h3>Radio and Playlists</h3><p class="muted" style="margin:0">Splendor Radio is the editorial side: stations picked by open, published rules from music artists submit, like Spotify's own playlists. Playlists is where curators live: anyone can build, share and climb on their taste. Winning a brief puts your playlist on the radio too.</p></div>
     <div class="panel"><h3>Artists: pitch to curators</h3><p class="muted" style="margin:0">Coming soon: pitch your song to curators right here. Free, a few pitches a week, no paying for a spot. Curators earn when listeners collect the songs they picked, so a weak song costs them too.</p></div>
   </div>
 
-  <div class="row-head" id="economy"><h2>How curators get paid</h2><span class="muted small">The playlisting economy</span></div>
-  <div id="econ"></div>`;
+  <div class="row-head" id="economy"><h2>How curators get paid</h2></div>
+  <p class="lead">When someone collects a song from your playlist, a share of that sale comes back to you, and to anyone who passed your playlist on. Each artist chooses whether to take part and how big the share is.</p>
+  <details class="panel tech" id="econ-d"><summary>See how the money moves, step by step</summary><div id="econ" style="margin-top:14px"></div></details>`;
   $("#be-curator").onclick = curatorModal;
   $("#brief-rules").onclick = briefRules;
   [$("#brief-go"), $("#brief-go2")].forEach(b => b && (b.onclick = startBriefEntry));
@@ -1585,6 +1622,7 @@ function playlistsPage(focus) {
   if ($("#pls-new")) $("#pls-new").onclick = () => { const pl = PL.create(`My Playlist #${PL.all().length + 1}`); location.hash = "#/pl/" + pl.id + "/edit"; };
   economy($("#econ"));
   hydrate(view());
+  if (focus === "economy") $("#econ-d").open = true;
   if (focus === "economy" || focus === "brief") setTimeout(() => $("#" + focus)?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
 }
 
@@ -1622,6 +1660,32 @@ VIEWS.trust = async () => {
 };
 
 /* ---------- router ---------- */
+/* ---------- For artists: why bring your music here (plain words, no jargon) ---------- */
+function forArtists() {
+  const card = (i, h, p) => `<div class="fa-card"><span class="fa-i">${i}</span><b>${h}</b><p>${p}</p></div>`;
+  view().innerHTML = `
+  <section class="hero fa-hero"><div class="eyebrow">For artists</div><h1>Your music. Your page. Yours to keep.</h1>
+    <p class="hero-sub">No website builder to pay for. No monthly fee. Nobody can lock you out of your own work.</p>
+    <p>Splendor Music gives every artist a home page and a store in one place, and you get paid the moment a fan collects.</p></section>
+  <div class="fa-grid">
+    ${card("♫", "A page that's really yours", "Your photos, bio, videos, links and every release in one place. Change it whenever you like, free, forever.")}
+    ${card("$", "Paid straight away", "When a fan collects a song, you're paid in that moment, and your collaborators get their share automatically.")}
+    ${card("✎", "Your lyrics, your words", "Add your lyrics and the story behind each song yourself. Nobody charges you to show your own words next to your own music.")}
+    ${card("✋", "Fans tell you what's next", "Fans can ask for the releases they want here, so you know what to bring over first.")}
+    ${card("★", "Found by good taste, not ads", "Curators, weekly briefs and radio that nobody can pay their way onto.")}
+    ${card("◎", "Merch and tickets, coming", "Sell merch and gig tickets as collectables from the same page. Fans keep them, you keep the relationship.")}
+  </div>
+  <div class="row-head"><h2>Getting started</h2></div>
+  <div class="steps">
+    <div class="step"><span class="k">1</span><b>Release on Vibrr</b><p>Put your music out on <a href="https://vibrr.ai" target="_blank" rel="noopener" style="color:var(--accent)">Vibrr</a> with its Music Passport: credits, owners and who gets paid.</p></div>
+    <div class="step"><span class="k">2</span><b>Sign in here</b><p>Use the same account. Your page appears automatically.</p></div>
+    <div class="step"><span class="k">3</span><b>Make it yours</b><p>Tap Edit artist page: photos, bio, videos, links, lyrics.</p></div>
+    <div class="step"><span class="k">4</span><b>Share your link</b><p>Put your Splendor Music page in your Instagram and Spotify bio so fans can find you here.</p></div>
+  </div>
+  <p class="muted small" style="margin-top:22px">Your privacy: your page shows your artist name, not your wallet. The technical details are tucked away for anyone who wants to check them.</p>
+  <div class="foot">Splendor Music · concept and product design by Lachlan Grant Splendor</div>`;
+}
+
 /* ---------- navigation that never loses you (his ask 24 Nov 2026) ----------
    - a Back button that names where it goes ("‹ The Choice Is Yours")
    - each tab remembers where you were: tap Radio, wander off to Discover, tap Radio again = right where you left it
@@ -1656,6 +1720,12 @@ function navChrome(p0) {
   if (top && t) top.t = t;
   document.title = t && p0 !== "home" ? `${t} · Splendor Music` : "Splendor Music";
   const prev = NAV.stack[NAV.stack.length - 2], b = $("#back-btn");
+  const detail = !TABS.includes(p0) && !["playlists", "economy", "search"].includes(p0);
+  let cr = view().querySelector(":scope > .crumb");
+  if (prev && detail && !EMBED) {
+    if (!cr) { cr = document.createElement("button"); cr.className = "crumb"; cr.onclick = () => $("#back-btn").click(); view().prepend(cr); }
+    cr.innerHTML = `&#8249; Back to ${esc(prev.t || "the last page")}`;
+  } else if (cr) cr.hidden = true;
   if (b) { b.hidden = !prev || EMBED; if (prev) { $(".lbl", b).textContent = prev.t || "Back"; b.title = "Back to " + (prev.t || "the last page"); } }
   navSave();
 }
@@ -1704,6 +1774,7 @@ function route(keep) {
     case "playlists": playlistsPage(parts[1]); break;
     case "economy": playlistsPage("economy"); break;                       // old links still land in the right place
     case "search": search(rest); break;
+    case "for-artists": forArtists(); break;
     default: if (VIEWS[p0]) VIEWS[p0](parts, rest); else notFound();
   }
   if (keep) window.scrollTo(0, sy);

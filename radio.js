@@ -14,7 +14,7 @@ function siPick(t) {
   const w = RADIO.weights, score = w.fresh * fresh + w.under * under + w.passport * passport;
   const why = [];
   if (fresh > .6) why.push("new release"); if (under > .45) why.push("still undiscovered");
-  if (passport >= .8) why.push("complete Passport"); if (CHAIN.splits.has(t.id)) why.push("fair split on chain");
+  if (passport >= .8) why.push("complete Passport"); if (CHAIN.splits.has(t.id)) why.push("fair pay shares");
   return { score, why, fresh, under, passport };
 }
 function spread(list, perArtist = RADIO.perArtist, max = 25) {
@@ -24,13 +24,13 @@ function spread(list, perArtist = RADIO.perArtist, max = 25) {
 }
 function radioStations() {
   const bySi = TRACKS.slice().sort((a, b) => siPick(b).score - siPick(a).score);
-  const st = [{ slug: "new-talent", name: "New Talent", blurb: "SI picks from open rules: newer, less-discovered artists with complete Music Passports.", tracks: spread(bySi, 2, 25), h: 300 },
+  const st = [{ slug: "new-talent", name: "New Talent", blurb: "Newer artists still waiting to be discovered, picked by our open rules.", tracks: spread(bySi, 2, 25), h: 300 },
               { slug: "fresh", name: "Fresh Drops", blurb: "The newest releases on the network.", tracks: spread(TRACKS.slice().sort((a, b) => b.created - a.created), 3, 25), h: 190 }];
   const g = new Map();
   TRACKS.forEach(t => String(t.d.genre || "").split(/[|,/]/).map(x => x.trim()).filter(x => x && x.length < 24)
     .forEach(x => { const k = x.toLowerCase(); if (!g.has(k)) g.set(k, { name: x, list: [] }); if (!g.get(k).list.includes(t)) g.get(k).list.push(t); }));
   [...g.values()].filter(x => x.list.length >= 3).sort((a, b) => b.list.length - a.list.length).slice(0, 8)
-    .forEach(x => st.push({ slug: "genre-" + slugify(x.name), name: `${x.name} Radio`, blurb: `${x.name} from across the network, in SI-pick order.`, tracks: spread(x.list.sort((a, b) => siPick(b).score - siPick(a).score), 3, 30), h: hue(x.name) }));
+    .forEach(x => st.push({ slug: "genre-" + slugify(x.name), name: `${x.name} Radio`, blurb: `${x.name} from across Splendor Music, best picks first.`, tracks: spread(x.list.sort((a, b) => siPick(b).score - siPick(a).score), 3, 30), h: hue(x.name) }));
   const subs = store.get("radioSubs", []).map(s => byId.get(String(s.id))).filter(Boolean);
   if (subs.length) st.push({ slug: "submitted", name: "Submitted", blurb: "Music artists submitted for Splendor Radio.", tracks: subs, h: 40 });
   st.push({ slug: "favourites", name: "Collectors' Favourites", blurb: "What collectors hold the most.", tracks: spread(TRACKS.slice().sort((a, b) => b.issued - a.issued), 2, 25), h: 140 });
@@ -67,9 +67,9 @@ function radioHome() {
       <div class="legs">
         <div class="leg"><span class="sw" style="background:var(--c1)"></span><b style="font-family:Inter;font-size:14px">Fresh</b><span class="r">newer releases rank higher</span><b>${RADIO.weights.fresh * 100}%</b></div>
         <div class="leg"><span class="sw" style="background:var(--c2)"></span><b style="font-family:Inter;font-size:14px">Undiscovered</b><span class="r">fewer collects = more room to grow</span><b>${RADIO.weights.under * 100}%</b></div>
-        <div class="leg"><span class="sw" style="background:var(--c3)"></span><b style="font-family:Inter;font-size:14px">Complete Passport</b><span class="r">credits, ISRC, ℗/©, permissions, split on chain, story</span><b>${RADIO.weights.passport * 100}%</b></div>
+        <div class="leg"><span class="sw" style="background:var(--c3)"></span><b style="font-family:Inter;font-size:14px">Complete Passport</b><span class="r">credits, owners, permissions, pay shares, story</span><b>${RADIO.weights.passport * 100}%</b></div>
       </div>
-      <p class="muted small">Max ${RADIO.perArtist} songs per artist per station so nobody dominates. Next: SI that actually listens (sound, craft, originality), community signals from curators with good track records, and every pick logged on chain so anyone can audit it.</p>
+      <p class="muted small">Max ${RADIO.perArtist} songs per artist per station so nobody dominates. Next: picks that actually listen to the music (sound, craft, originality), community signals from curators with good track records, and every pick logged on chain so anyone can audit it.</p>
       ${typeof VR !== "undefined" && VR.ok ? `<p class="muted small"><b style="color:var(--text)">Vibrr Radio</b> is Vibrr's own live station, played here: songs their artists opted in on Vibrr, ordered by real plays from Vibrr's feed.</p>` : ""}</div>
     <div class="panel"><h2>For artists</h2>
       <ol class="rules">
