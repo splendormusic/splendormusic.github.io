@@ -67,7 +67,7 @@ function collectInfo(t, again) {
   if (!(price > 0) || !tok) return { ok: false, why: "No listed price yet" };
   if (!(t.minters || []).includes(SPLITTER)) return { ok: false, why: "The split contract can't mint this collection" };
   if (t.max > 0 && t.issued >= t.max) return { ok: false, why: "Sold out" };
-  return { ok: true, price, sym, tok, qty: `${price.toFixed(tok.precision)} ${sym}`, label: `${num(price)} ${sym}` };
+  return { ok: true, price, sym, tok, qty: `${price.toFixed(tok.precision)} ${sym}`, label: money(price, sym) };
 }
 function updateCollectBtn(t) {
   const b = $("#p-collect"); if (!b || !t) return;
@@ -91,7 +91,7 @@ async function collect(id, again) {
   const ps = payShares(t);
   const m = modal(`<div class="m-head"><div><h3>Collect “${esc(t.title)}”</h3><div class="muted small">${esc(t.artist)} · ${esc(edition(t))}</div></div><button class="x" data-mclose>&times;</button></div>
     <div class="m-body">
-      <div class="psong"><img src="${esc(ipfs(t.img))}" alt=""><div class="m"><b>${esc(t.title)}</b><span class="muted small">A fresh copy is minted straight to your account</span></div><b class="mono">${esc(ci.qty)}</b></div>
+      <div class="psong"><img src="${esc(ipfs(t.img))}" alt=""><div class="m"><b>${esc(t.title)}</b><span class="muted small">A fresh copy is minted straight to your account</span></div><b>${esc(ci.label)}<small class="muted" style="display:block;font-weight:500;font-size:11px">${esc(ci.qty)}</small></b></div>
       <div class="sub-h" style="margin:4px 0 0">Where your ${esc(ci.label)} goes</div>${legRows(ps.legs, ci.price, ci.sym)}
       <div class="muted small">You'll approve the exact transfer in WebAuth: ${esc(ci.qty)} to <span class="mono">${SPLITTER}</span> with memo <span class="mono">mint,${esc(t.id)}</span>. Splendor Music never holds your money. Curator shares (artists opt in and set the share) are being scoped by Vibrr, so for now 100% follows the split above.</div>
       <div id="c-status" class="err"></div>
