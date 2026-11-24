@@ -1,4 +1,4 @@
-/* Splendor Music: prototype v0.4.5 (24 Nov 2026: Vibrr listening copies, real album names, live Vibrr Radio station)
+/* Splendor Music: prototype v0.5.0 (24 Nov 2026: Playlists tab + briefs, brand fonts, Now Playing, back nav; v0.4.4: Vibrr listening copies, real album names, live Vibrr Radio station)
    Concept + product design: Lachlan Grant Splendor (Vibrr Music / Music Passport; X post 15 Sep 2026; the
    playlisting economy). "Mint on Vibrr. Listen, share and earn on Splendor Music."
    Data: public XPR Network chain data only: AtomicAssets (Vibrr's music schema "cxcmus"), Vibrr's split contract
@@ -317,7 +317,7 @@ function loadTrack() {
   $("#p-art").src = art(t); $("#p-pass").href = "#/passport/" + enc(t.id);
   $("#p-like").dataset.like = t.id; $("#p-save").dataset.save = t.id;
   const rec = store.get("recent", []).map(String).filter(x => x !== t.id); rec.unshift(t.id); store.set("recent", rec.slice(0, 50));
-  markPlaying(); refreshHearts();
+  markPlaying(); refreshHearts(); npRender();
 }
 function markPlaying() { const id = P.cur()?.id || ""; $$(".trk").forEach(el => el.classList.toggle("playing", el.dataset.id === id)); }
 function initPlayer() {
@@ -340,6 +340,69 @@ function initPlayer() {
   $("#p-prev").onclick = () => { if (a.currentTime > 4 || P.i <= 0) a.currentTime = 0; else { P.i--; loadTrack(); } };
   $("#p-seek").oninput = e => { if (a.duration) a.currentTime = a.duration * e.target.value / 1000; };
   $("#p-vol").oninput = e => a.volume = e.target.value / 100;
+  a.addEventListener("play", npRender); a.addEventListener("pause", npRender); a.addEventListener("timeupdate", npTime);
+}
+
+/* ---------- Now Playing: the full-screen player (tap the artwork; Back, Esc or the arrow closes it) ---------- */
+const NP = { open: false };
+const cssUrl = u => `url("${String(u || "").replace(/["\\\n\r]/g, encodeURIComponent)}")`;
+function npRender() {
+  if (!NP.open) return;
+  const t = P.cur(), a = P.audio;
+  $("#np").classList.toggle("paused", !t || a.paused);
+  $("#np-play").innerHTML = a.paused ? "&#9654;" : "&#10074;&#10074;";
+  if (!t) return;
+  const src = $("#p-art").src || ipfs(t.img);
+  if ($("#np-art").src !== src) { $("#np-art").src = src; $("#np-bg").style.backgroundImage = cssUrl(src); }
+  $("#np-title").textContent = t.title; $("#np-title").href = "#/passport/" + enc(t.id);
+  $("#np-artist").textContent = `${t.artist} · ${t.release}`; $("#np-artist").href = "#/release/" + enc(t.key);
+  $("#np-ctx").textContent = P.ctx || t.release || "Now playing";
+  $("#np-pass").href = "#/passport/" + enc(t.id);
+  $("#np-like").dataset.like = t.id; $("#np-save").dataset.save = t.id;
+  const up = P.queue.slice(P.i + 1, P.i + 40);
+  $("#np-queue").innerHTML = up.length ? up.map((x, k) => `<button class="np-qi" data-npq="${P.i + 1 + k}"><img src="${esc(ipfs(x.img))}" alt=""><span><b>${esc(x.title)}</b><small>${esc(x.artist)}</small></span></button>`).join("")
+    : `<div class="small" style="color:rgba(255,255,255,.6)">Nothing queued after this song.</div>`;
+  refreshHearts();
+}
+function npTime() {
+  if (!NP.open) return; const a = P.audio;
+  $("#np-cur").textContent = fmt(a.currentTime); $("#np-dur").textContent = fmt(a.duration);
+  if (a.duration && !NP.seeking) $("#np-seek").value = 1000 * a.currentTime / a.duration;
+}
+function npOpen() {
+  if (NP.open || !P.cur()) return;
+  NP.open = true; $("#np").hidden = false; document.body.classList.add("np-open");
+  history.pushState({ np: 1 }, "", location.href);                     // so the phone's Back gesture closes it
+  npRender(); npTime();
+}
+function npClose(fromPop) {
+  if (!NP.open) return;
+  NP.open = false; $("#np").hidden = true; document.body.classList.remove("np-open");
+  if (!fromPop && history.state?.np) history.back();
+}
+function initNP() {
+  $("#p-open").onclick = npOpen;
+  // phones: tapping the mini player opens Now Playing (like Apple Music); desktop keeps the title link
+  $(".p-meta").addEventListener("click", e => { if (matchMedia("(max-width:820px)").matches && P.cur()) { e.preventDefault(); npOpen(); } });
+  $("#np-close").onclick = () => npClose();
+  $("#np-play").onclick = () => $("#p-play").click();
+  $("#np-prev").onclick = () => $("#p-prev").click();
+  $("#np-next").onclick = () => $("#p-next").click();
+  const sk = $("#np-seek");
+  sk.oninput = () => { NP.seeking = true; const a = P.audio; if (a.duration) a.currentTime = a.duration * sk.value / 1000; };
+  sk.onchange = () => NP.seeking = false;
+  $("#np").addEventListener("click", e => {
+    const q = e.target.closest("[data-npq]"); if (q) { P.i = +q.dataset.npq; loadTrack(); return; }
+    const l = e.target.closest("a[href^='#/']"); if (!l) return;
+    // a link inside Now Playing: swap the Now Playing history entry for the page, so Back stays clean
+    e.preventDefault(); const href = l.getAttribute("href");
+    NP.open = false; $("#np").hidden = true; document.body.classList.remove("np-open");
+    if (history.state?.np) { history.replaceState(null, "", href); route(); } else location.hash = href;
+  });
+  window.addEventListener("popstate", () => { if (NP.open && !history.state?.np) npClose(true); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && NP.open && !$(".modal-bg")) npClose(); });
+  // Back goes exactly where its label says (our own trail, not the browser's raw history)
+  $("#back-btn").onclick = () => { const prev = NAV.stack[NAV.stack.length - 2]; if (prev) { NAV.restore = true; location.hash = prev.h; } else history.back(); };
 }
 
 /* ---------- shared UI ---------- */
@@ -501,7 +564,7 @@ function home() {
     <div class="row-head"><h2>Artists to discover</h2><a class="muted" href="#/artists">All artists</a></div>
     <div class="grid">${rising.map(artistCard).join("")}</div>
     ${typeof radioStations === "function" ? `<div class="row-head"><h2>Splendor Radio</h2><a class="muted" href="#/radio">Free listening, open rules →</a></div><div class="grid">${radioStations().slice(0, 4).map(stationCard).join("")}</div>` : ""}
-    <a class="econ-banner" href="#/economy"><div><div class="eyebrow">New</div><h2>Welcome to the playlisting economy</h2><div class="muted">Curate it. Share it. When the artists you champion grow, everyone in the chain earns.</div></div><span class="btn">How it works</span></a>
+    <a class="econ-banner" href="#/playlists"><div><div class="eyebrow">For curators</div><h2>Your taste is worth something</h2><div class="muted">Build playlists, answer the weekly brief, and earn when listeners collect the songs you found.</div></div><span class="btn">Become a curator</span></a>
     <div class="foot">Splendor Music · concept and product design by Lachlan Grant Splendor · live data from the XPR Network · <a href="#/trust" style="color:var(--accent)">Trust &amp; safety</a></div>`;
   $$("#genres [data-g]").forEach(b => b.onclick = () => {
     $$("#genres .chip").forEach(c => c.classList.toggle("on", c === b));
@@ -550,7 +613,7 @@ function artist(name) {
       <div class="actions"><button class="btn big" id="play-artist">&#9654; Play all</button><button class="btn ghost" id="shuf-artist">&#8644; Shuffle</button><button class="btn ghost" data-save="${esc(all.map(t => t.id).join(","))}" data-label="${esc("All songs by " + a.name)}">+ Save all</button></div></div></section>
     <div class="row-head"><h2>Songs</h2></div>${listHead()}<div class="tracks" data-list="artist">${all.map((t, i) => trackRow(t, i, { thumb: 1, release: 1 })).join("")}</div>
     <div class="row-head"><h2>Discography</h2></div><div class="grid">${a.releases.map(relCard).join("")}</div>`;
-  $("#play-artist").onclick = () => playQueue(all);
+  $("#play-artist").onclick = () => playQueue(all); setAmbient(a.img);
   $("#shuf-artist").onclick = () => playQueue(shuffled(all));
   hydrate(view());
 }
@@ -579,7 +642,7 @@ async function release(key) {
       ${d.about ? `<div class="about">${esc(d.about)}</div>` : ""}
       <div style="margin-top:16px">${[["Spotify", d.spotify], ["YouTube", d.youtube], ["Bandcamp", d.link]].filter(x => /^https?:\/\//.test(x[1] || "")).map(([n, u]) => `<a class="pill" target="_blank" rel="noopener" href="${esc(u)}">${n} ↗</a>`).join("")}</div>
     </div></section>`;
-  $("#play-rel").onclick = () => playQueue(r.tracks);
+  $("#play-rel").onclick = () => playQueue(r.tracks); setAmbient(r.img);
   $("#shuf-rel").onclick = () => playQueue(shuffled(r.tracks));
   $("#share").onclick = () => shareModal(`${r.title} by ${r.artist} on Splendor Music`, location.href);
   const counts = new Map();
@@ -651,7 +714,7 @@ const legRows = (legs, price, cur) => `<div class="legs">${legs.map((l, i) => `<
 async function passportPage(id) {
   const t = byId.get(String(id)); if (!t) return notFound();
   const d = t.d, credits = parseCredits(d.credits), pl = owner(d.p_line), cl = owner(d.c_line), con = contribs(d), [m1, m2] = mrz(t);
-  LISTS.pass = [t];
+  LISTS.pass = [t]; setAmbient(t.img);
   const perms = [["Sync", "allow_sync", "Film, TV, ads and games"], ["Commercial use", "allow_commercial", "Use in commercial projects"], ["Sampling", "allow_sampling", "Sample parts of the recording"],
                  ["Remix", "allow_remix", "Make a remix"], ["Cover", "allow_cover", "Record a cover version"]].filter(([, k]) => k in d);
   const kv = (k, v, copyable) => v ? `<div class="k">${k}</div><div class="v"><span>${esc(v)}</span>${copyable ? `<button class="copy" data-copy="${esc(v)}">copy</button>` : ""}</div>` : "";
@@ -828,10 +891,13 @@ function playlistPage(id, editNow) {
       <div class="actions">${tracks.length ? `<button class="btn big" id="pl-play">&#9654; Play</button><button class="btn ghost" id="pl-shuf">&#8644; Shuffle</button>` : ""}
         ${p.liked ? "" : `${tracks.length ? `<button class="btn ghost" id="pl-share">Share &amp; earn</button>` : ""}<button class="btn ghost" id="pl-del">Delete</button>`}</div>
       <div id="pl-confirm"></div></div></section>
+    ${p.brief === BRIEF.id ? `<section class="brief" style="margin:22px 0 8px"><div><span class="closes">Brief #${BRIEF.no} entry · closes ${esc(briefCloses().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "short" }))}</span><h2>${esc(BRIEF.title)}</h2>
+      <p style="color:#d8d1e3;margin:0">${esc(BRIEF.blurb)}</p><div class="actions"><button class="btn ghost sm" id="pl-rules">How entries are judged</button><a class="btn ghost sm" href="#/playlists/brief">The brief</a></div></div>
+      <div class="prize"><b>Live score</b>${scoreBlock(briefScore(tracks))}</div></section>` : ""}
     ${tracks.length ? `${listHead()}<div class="tracks" data-list="pl" id="pl-tracks">${tracks.map((t, i) => trackRow(t, i, { thumb: 1, artist: 1, release: 1, drag: !p.liked, remove: 1 })).join("")}</div>
       ${p.liked ? "" : `<p class="muted small">Drag songs to reorder.</p>`}`
       : `<div class="empty-state"><b>${p.liked ? "Songs you like will appear here" : "Let's find something for your playlist"}</b>Tap ♥ or + on any song${p.liked ? "" : ", or add from the suggestions below"}.</div>`}
-    ${!p.liked && tracks.length ? `<div class="note">Share this playlist with <b>Share &amp; earn</b>. In the playlisting economy, when someone collects a song through your link, a share of that collect (artists opt in and choose it) flows back down the chain to you and everyone who passed it on. Coming with Vibrr's curator share. <a href="#/economy" style="color:var(--accent)">How it works</a></div>` : ""}
+    ${!p.liked && tracks.length ? `<div class="note">Share this playlist with <b>Share &amp; earn</b>. In the playlisting economy, when someone collects a song through your link, a share of that collect (artists opt in and choose it) flows back down the chain to you and everyone who passed it on. Coming with Vibrr's curator share. <a href="#/playlists/economy" style="color:var(--accent)">How it works</a></div>` : ""}
     ${recs.length ? `<div class="row-head"><h2>Recommended</h2><span class="muted small">Based on what's in this playlist</span></div>
       <div class="tracks" data-list="recs">${recs.map((t, i) => trackRow(t, i, { thumb: 1, artist: 1, release: 1, extra: `<button class="btn ghost sm" data-addto="${esc(p.id)}" data-tid="${esc(t.id)}">Add</button>` })).join("")}</div>` : ""}`;
   if (tracks.length) { $("#pl-play").onclick = () => playQueue(tracks); $("#pl-shuf").onclick = () => playQueue(shuffled(tracks)); }
@@ -853,6 +919,8 @@ function playlistPage(id, editNow) {
   };
   if (editNow) { history.replaceState(null, "", "#/pl/" + id); editName(); }
   if ($("#pl-share")) $("#pl-share").onclick = () => sharePlaylist(PL.get(id));
+  if ($("#pl-rules")) $("#pl-rules").onclick = briefRules;
+  if (!p.liked && tracks[0]) setAmbient(tracks[0].img);
   $("#pl-del").onclick = () => {
     $("#pl-confirm").innerHTML = `<div class="confirm"><span>Delete “${esc(p.name)}”? This can't be undone.</span><button class="btn danger sm" id="pl-yes">Delete</button><button class="btn ghost sm" id="pl-no">Cancel</button></div>`;
     $("#pl-no").onclick = () => $("#pl-confirm").innerHTML = "";
@@ -904,7 +972,8 @@ function sharedView(raw) {
       <div class="muted small">${curator ? `Curated by ${acctLink(curator)}` : "Shared with you"}${via.length ? ` · passed on by ${via.map(v => acctLink(v)).join(" → ")}` : ""} · ${plural(tracks.length, "song")}</div>
       <div class="actions"><button class="btn big" id="sh-play">&#9654; Play</button><button class="btn ghost" id="sh-shuf">&#8644; Shuffle</button><button class="btn ghost" id="sh-save">+ Save to my library</button><button class="btn ghost" id="sh-pass">Pass it on</button></div></div></section>
     ${listHead()}<div class="tracks" data-list="shared">${tracks.map((t, i) => trackRow(t, i, { thumb: 1, artist: 1, release: 1 })).join("")}</div>
-    ${curator ? `<div class="note">Coming soon: when the artist opts in, collecting a song from this playlist sends a share they choose (say <b>20%</b>) back down the chain to ${esc(curator)}${via.length ? ` and ${via.map(esc).join(", ")}` : ""}, the people who got this music to you. The rest goes to the artist's Passport split. Today, 100% follows the artist's split. <a href="#/economy" style="color:var(--accent)">The playlisting economy</a></div>` : ""}`;
+    ${curator ? `<div class="note">Coming soon: when the artist opts in, collecting a song from this playlist sends a share they choose (say <b>20%</b>) back down the chain to ${esc(curator)}${via.length ? ` and ${via.map(esc).join(", ")}` : ""}, the people who got this music to you. The rest goes to the artist's Passport split. Today, 100% follows the artist's split. <a href="#/playlists/economy" style="color:var(--accent)">The playlisting economy</a></div>` : ""}`;
+  if (tracks[0]) setAmbient(tracks[0].img);
   $("#sh-play").onclick = () => playQueue(tracks); $("#sh-shuf").onclick = () => playQueue(shuffled(tracks));
   $("#sh-save").onclick = () => { const pl = PL.create(name, tracks.map(t => t.id), { desc, curator: curator || undefined, via }); toast(`Saved “${pl.name}” to your library`); location.hash = "#/pl/" + pl.id; };
   $("#sh-pass").onclick = () => sharePlaylist({ name, desc, ids: tracks.map(t => t.id), curator, via });
@@ -1129,17 +1198,17 @@ function pipeline(price, artistPct, curator, sharers) {
   }
   return { artist: price * artistPct / 100, legs };
 }
-async function economy() {
-  view().innerHTML = `<div class="loading">Reading the split contract…</div>`;
+/* the playlisting economy: lives at the bottom of the Playlists tab (#/playlists/economy) */
+async function economy(el) {
+  el.innerHTML = `<div class="loading">Reading the split contract…</div>`;
   await CHAIN.ready;
-  if (!location.hash.startsWith("#/economy")) return;
+  if (!el.isConnected) return;
   const m = me(), def = byId.get("130261") || TRACKS[0];
   const proof = [...CHAIN.collects.entries()].flatMap(([tid, l]) => l.map(c => ({ ...c, t: byId.get(tid) }))).filter(c => c.t).sort((a, b) => b.outs.length - a.outs.length)[0];
   const songs = TRACKS.slice().sort((a, b) => (a.artist + a.title).localeCompare(b.artist + b.title));
-  view().innerHTML = `
-  <section class="manifesto"><div class="eyebrow">Splendor Music</div><h1>Welcome to the playlisting economy.</h1>
-    <p>Mint on Vibrr. Listen and share on Splendor Music. We're in the age of turning our social, digital interactions into ways to hold each other up, while AI helps all of us expand what we're aware of. Playlists are word of mouth. Here, word of mouth pays.</p>
-    <p class="muted" style="font-size:15px">Artists opt in and choose the share. Say they keep 80% through their Music Passport split: the other 20% flows back down the pipeline to the people who helped the song get there: the curator who made the playlist, and every person who passed it on. Share for share, like Facebook back in 2019, except this time the people sharing get paid too.</p></section>
+  el.innerHTML = `
+  <div class="panel" style="padding:26px 28px"><p style="font-size:17px;margin:0 0 10px;color:#dcd8ea">Mint on Vibrr. Listen and share on Splendor Music. We're in the age of turning our social, digital interactions into ways to hold each other up, while AI helps all of us expand what we're aware of. Playlists are word of mouth. Here, word of mouth pays.</p>
+    <p class="muted" style="font-size:15px;margin:0">Artists opt in and choose the share. Say they keep 80% through their Music Passport split: the other 20% flows back down the pipeline to the people who helped the song get there: the curator who made the playlist, and every person who passed it on. Share for share, like Facebook back in 2019, except this time the people sharing get paid too.</p></div>
   <div class="steps">
     <div class="step"><span class="k">01</span><b>Artists mint</b><p>Release on Vibrr with a Music Passport: credits, copyright, permissions, and a payment split enforced on chain.</p></div>
     <div class="step"><span class="k">02</span><b>Listeners curate</b><p>Collect what you love, build playlists, and decorate your Corner with your music, gigs and art.</p></div>
@@ -1200,7 +1269,113 @@ async function economy() {
   $("#s-price").oninput = calc; $("#s-art").oninput = calc; $("#s-curator").oninput = calc;
   $("#s-add").onclick = () => { if (direct) { direct = false; $("#s-none").textContent = "Direct collect (no playlist)"; } if (sharers.length < PIPE.hops) { sharers.push("sharer" + (sharers.length + 1)); drawChain(); calc(); } else toast(`Chains stop at ${PIPE.hops} people`); };
   $("#s-none").onclick = () => { direct = !direct; $("#s-none").textContent = direct ? "Through a playlist" : "Direct collect (no playlist)"; calc(); };
-  drawChain(); calc(); hydrate(view());
+  drawChain(); calc(); hydrate(el);
+}
+
+/* ---------- Playlists tab: curators, the weekly brief, Featured spots (his design, 24 Nov 2026) ----------
+   Splendor Radio = editorial (SI picks from artist submissions). Playlists = where curators live.
+   Curators answer a weekly BRIEF; the best entries get the call-up: a Featured spot + a guest slot on a station.
+   Nobody can buy a spot. Prototype: entries live in this browser until there's a shared playlist registry. */
+const BRIEF = { id: "brief-1", no: 1, title: "Salt Air Sunday", min: 10, max: 20, perArtist: 2,
+  blurb: "Slow mornings by the sea. Acoustic, warm and unhurried: the songs you'd play with the doors open and the coffee on.",
+  words: ["acoustic", "folk", "chill", "calm", "mellow", "warm", "uplifting", "nostalgic", "peaceful", "relax", "soft", "dream", "happy", "reflective",
+          "sea", "ocean", "beach", "surf", "salt", "morning", "sunday", "sun", "indie", "singer", "roots", "country", "guitar", "piano", "ambient", "love"] };
+function briefCloses() { const d = new Date(); d.setDate(d.getDate() + (7 - d.getDay()) % 7); d.setHours(23, 59, 0, 0); return d; }
+const briefText = t => [t.d.genre, t.d.mood, t.d.about, t.d.description, t.title, t.release].filter(Boolean).join(" ").toLowerCase();
+// the SI rules for a brief, published so every curator plays by the same ones
+function briefScore(tracks, b = BRIEF) {
+  const n = tracks.length; if (!n) return { score: 0, parts: [], tips: [`Add ${b.min} to ${b.max} songs to get a score.`] };
+  const per = new Map(); tracks.forEach(t => per.set(t.artist, (per.get(t.artist) || 0) + 1));
+  const excess = [...per.values()].reduce((s, c) => s + Math.max(0, c - b.perArtist), 0);
+  const fit = tracks.filter(t => b.words.some(w => briefText(t).includes(w))).length / n;
+  const disc = tracks.filter(t => (t.issued || 0) <= 10).length / n;
+  const pass = typeof siPick === "function" ? tracks.reduce((s, t) => s + siPick(t).passport, 0) / n : .5;
+  let adj = 0; for (let i = 1; i < n; i++) if (tracks[i].artist === tracks[i - 1].artist) adj++;
+  const flow = n > 1 ? 1 - adj / (n - 1) : 1, size = n < b.min ? n / b.min : n > b.max ? b.max / n : 1, variety = Math.max(0, 1 - excess / n);
+  const parts = [["Fits the brief", fit, 30], ["Discovery", disc, 20], ["Variety", variety, 15], ["Length", size, 15], ["Flow", flow, 10], ["Passports", pass, 10]];
+  const tips = [];
+  if (n < b.min) tips.push(`Add ${b.min - n} more song${b.min - n === 1 ? "" : "s"} (${b.min} to ${b.max}).`); else if (n > b.max) tips.push(`Trim to ${b.max} songs.`);
+  if (fit < .6) tips.push("More songs that feel like the brief: acoustic, warm, by-the-sea moods.");
+  if (disc < .4) tips.push("Find a few undiscovered artists (songs with 10 or fewer copies collected).");
+  if (excess) tips.push(`Max ${b.perArtist} songs per artist.`);
+  if (flow < 1) tips.push("Spread out songs by the same artist.");
+  if (pass < .6) tips.push("Songs with complete Music Passports score higher.");
+  return { score: Math.round(parts.reduce((s, [, v, w]) => s + v * w, 0)), parts, tips };
+}
+const scoreBlock = s => `<div class="score"><div class="ring" style="--v:${s.score}">${s.score}</div><div class="parts">${s.parts.map(([k, v]) => `<div class="sbar"><span>${k}</span><i><b style="width:${Math.round(v * 100)}%"></b></i><span>${Math.round(v * 100)}</span></div>`).join("")}</div></div>
+  ${s.tips.length ? `<ul class="tips">${s.tips.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : `<p class="small" style="color:var(--ok);margin:10px 0 0">Strong entry. Share it so listeners can find it.</p>`}`;
+const briefEntry = () => PL.all().find(p => p.brief === BRIEF.id);
+function startBriefEntry() {
+  const e = briefEntry(); if (e) { location.hash = "#/pl/" + e.id; return; }
+  const pl = PL.create(`${BRIEF.title}`, [], { brief: BRIEF.id, desc: `My entry for Brief #${BRIEF.no}: ${BRIEF.blurb}` });
+  toast(`Your entry for “${BRIEF.title}” is ready. Add ${BRIEF.min} to ${BRIEF.max} songs.`);
+  location.hash = "#/pl/" + pl.id;
+}
+function briefRules() {
+  modal(`<div class="m-head"><div><h3>How entries are judged</h3><div class="muted small">Brief #${BRIEF.no} · ${esc(BRIEF.title)}</div></div><button class="x" data-mclose>&times;</button></div>
+    <div class="m-body"><p style="margin:0">SI scores every entry with the same published rules. Money is never an input.</p>
+      <div class="legs">${[["Fits the brief", 30, "the songs' genres, moods and stories match the brief"], ["Discovery", 20, "artists still waiting to be found"], ["Variety", 15, `max ${BRIEF.perArtist} songs per artist`], ["Length", 15, `${BRIEF.min} to ${BRIEF.max} songs`], ["Flow", 10, "no back-to-back songs by the same artist (later: tempo, key and energy)"], ["Passports", 10, "credits, ISRC, owners, permissions, split on chain"]]
+        .map(([k, w, s], i) => `<div class="leg"><span class="sw" style="background:${COLORS[i % COLORS.length]}"></span><b style="font-family:Inter;font-size:14px">${k}</b><span class="r">${s}</span><b>${w}%</b></div>`).join("")}</div>
+      <p class="muted small" style="margin:0">Then real listening decides between the best: people who play the playlist through, save it, and collect from it. The top entries get a Featured spot for two weeks and a guest slot on a Splendor Radio station.</p></div>
+    <div class="m-foot"><button class="btn" data-mclose>Got it</button></div>`);
+}
+function curatorModal() {
+  const m = me(), e = briefEntry();
+  const mm = modal(`<div class="m-head"><div><h3>Become a curator</h3><div class="muted small">Three steps. Free, always.</div></div><button class="x" data-mclose>&times;</button></div>
+    <div class="m-body"><div class="steps-big">
+      <div class="sb"><span class="sb-i">1</span><div><b>${m ? `Signed in as ${esc(m)}` : "Sign in with WebAuth"}</b><small>Your XPR account is your curator name and where your share gets paid.</small></div></div>
+      <div class="sb"><span class="sb-i">2</span><div><b>Build a playlist</b><small>Start with this week's brief, “${esc(BRIEF.title)}”, or any theme you love.</small></div></div>
+      <div class="sb"><span class="sb-i">3</span><div><b>Share it anywhere</b><small>Your link carries your name. When listeners collect through it, you earn (once artists opt in).</small></div></div>
+    </div></div>
+    <div class="m-foot">${m ? "" : `<button class="btn ghost" id="cm-sign">Sign in</button>`}<button class="btn" id="cm-go">${e ? "Open my brief entry" : "Start my brief entry"}</button></div>`, "sheet");
+  $("#cm-go", mm).onclick = () => { closeModal(); startBriefEntry(); };
+  if ($("#cm-sign", mm)) $("#cm-sign", mm).onclick = () => { closeModal(); accountMenu(); };
+}
+function playlistsPage(focus) {
+  const m = me(), mine = PL.all(), entry = briefEntry();
+  const closes = briefCloses().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "short" });
+  const entryTracks = entry ? entry.ids.map(i => byId.get(i)).filter(Boolean) : [];
+  view().innerHTML = `
+  <section class="manifesto curate-hero"><div class="eyebrow">Playlists · for curators</div>
+    <h1>Your taste is worth something.</h1>
+    <p>Build playlists, answer the brief, and earn when listeners collect the songs you found.</p>
+    <div class="actions"><button class="btn big" id="be-curator">Become a curator</button><a class="btn ghost big" href="#/playlists/brief">This week's brief</a></div></section>
+
+  <div class="row-head" id="brief"><h2>This week's brief</h2><span class="muted small">Brief #${BRIEF.no} · free to enter · picked by open rules, never sold</span></div>
+  <section class="brief">
+    <div><span class="closes">Open · closes ${esc(closes)}</span><h2>${esc(BRIEF.title)}</h2>
+      <p style="font-size:16px;color:#d8d1e3;margin:0">${esc(BRIEF.blurb)}</p>
+      <ul><li>${BRIEF.min} to ${BRIEF.max} songs from Splendor Music</li><li>Max ${BRIEF.perArtist} songs per artist</li><li>Mix in artists still waiting to be discovered</li><li>One entry per curator</li></ul>
+      <div class="actions">${entry ? `<a class="btn" href="#/pl/${enc(entry.id)}">Open your entry</a>` : `<button class="btn" id="brief-go">Start your entry</button>`}<button class="btn ghost" id="brief-rules">How entries are judged</button></div></div>
+    <div class="prize">${entry ? `<b>Your entry · ${esc(entry.name)} · ${plural(entryTracks.length, "song")}</b>${scoreBlock(briefScore(entryTracks))}`
+      : `<b>The call-up</b><p class="muted" style="margin:0">The best entries win a Featured spot for two weeks and a guest slot on a Splendor Radio station, credited to you. Like a DJ getting the call-up because they've got the tunes the party wants: your playlist plays at the party, even when you're not there.</p>`}</div>
+  </section>
+
+  <div class="row-head"><h2>Featured curators</h2><span class="muted small">12 spots · refreshed every fortnight · never sold</span></div>
+  <div class="slots">${Array.from({ length: 12 }, (_, i) => `<div class="slot"><b>${i + 1}</b><span>Open spot</span></div>`).join("")}</div>
+  <p class="muted small">The first twelve come from Brief #${BRIEF.no} entries. Featured spots are earned by answering briefs well, never bought.</p>
+
+  <div class="row-head"><h2>Your curator studio</h2>${m ? `<a class="me-chip" href="#/u/${enc(m)}">${av(m)}<span>${esc(m)}</span></a>` : `<button class="btn ghost sm" id="pls-sign">Sign in to curate</button>`}</div>
+  ${mine.length ? `<div class="grid">${mine.map(plCard).join("")}<button class="card new" id="pls-new"><span>+</span>New playlist</button></div>`
+    : `<div class="empty-state"><b>No playlists yet</b>Start with this week's brief, or build one from songs you love.<div class="actions" style="justify-content:center"><button class="btn" id="brief-go2">Start your brief entry</button></div></div>`}
+
+  <div class="row-head"><h2>How it works</h2></div>
+  <div class="how3">
+    <div class="panel"><h3>How playlists rise</h3><p class="muted" style="margin:0">Rankings use real listening: people who play your playlist through, save it, follow you, and collect songs from it. Finding artists early counts extra. Collecting through your own playlist, or the same accounts looping, doesn't count. Nobody can pay to move up.</p></div>
+    <div class="panel"><h3>Radio and Playlists</h3><p class="muted" style="margin:0">Splendor Radio is the editorial side: stations SI picks from music artists submit, like Spotify's own playlists. Playlists is where curators live: anyone can build, share and climb on their taste. Winning a brief puts your playlist on the radio too.</p></div>
+    <div class="panel"><h3>Artists: pitch to curators</h3><p class="muted" style="margin:0">Coming soon: pitch your song to curators right here. Free, a few pitches a week, no paying for a spot. Curators earn when listeners collect the songs they picked, so a weak song costs them too.</p></div>
+  </div>
+
+  <div class="row-head" id="economy"><h2>How curators get paid</h2><span class="muted small">The playlisting economy</span></div>
+  <div id="econ"></div>`;
+  $("#be-curator").onclick = curatorModal;
+  $("#brief-rules").onclick = briefRules;
+  [$("#brief-go"), $("#brief-go2")].forEach(b => b && (b.onclick = startBriefEntry));
+  if ($("#pls-sign")) $("#pls-sign").onclick = accountMenu;
+  if ($("#pls-new")) $("#pls-new").onclick = () => { const pl = PL.create(`My Playlist #${PL.all().length + 1}`); location.hash = "#/pl/" + pl.id + "/edit"; };
+  economy($("#econ"));
+  hydrate(view());
+  if (focus === "economy" || focus === "brief") setTimeout(() => $("#" + focus)?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
 }
 
 
@@ -1237,12 +1412,73 @@ VIEWS.trust = async () => {
 };
 
 /* ---------- router ---------- */
+/* ---------- navigation that never loses you (his ask 24 Nov 2026) ----------
+   - a Back button that names where it goes ("‹ The Choice Is Yours")
+   - each tab remembers where you were: tap Radio, wander off to Discover, tap Radio again = right where you left it
+   - tapping the tab you're already on takes you to its top
+   - going Back puts you at the same scroll position you left */
+const TABS = ["home", "radio", "playlists", "artists", "library"];
+const TAB_ROOT = { home: "#/", radio: "#/radio", playlists: "#/playlists", artists: "#/artists", library: "#/library" };
+const TAB_NAME = { home: "Discover", radio: "Radio", playlists: "Playlists", artists: "Artists", library: "Library" };
+const ss = { get(k, d) { try { return JSON.parse(sessionStorage.getItem(k)) ?? d; } catch { return d; } }, set(k, v) { try { sessionStorage.setItem(k, JSON.stringify(v)); } catch {} } };
+const NAV = { stack: ss.get("nav.stack", []), tab: ss.get("nav.tab", "home"), last: ss.get("nav.last", {}), scroll: ss.get("nav.scroll", {}), cur: "", restore: false, next: "", fresh: false };
+const curHash = () => location.hash && location.hash.length > 1 ? location.hash : "#/";
+function navSave() {
+  ss.set("nav.stack", NAV.stack.slice(-60)); ss.set("nav.tab", NAV.tab); ss.set("nav.last", NAV.last);
+  const k = Object.keys(NAV.scroll); if (k.length > 80) k.slice(0, k.length - 80).forEach(x => delete NAV.scroll[x]); ss.set("nav.scroll", NAV.scroll);
+}
+function tabFor(p0) {
+  if (NAV.next) { const t = NAV.next; NAV.next = ""; return t; }
+  if (TABS.includes(p0)) return p0;
+  if (p0 === "economy") return "playlists";
+  if (NAV.stack.length > 1) return NAV.tab;                     // detail pages belong to the tab you opened them from
+  return { pl: "library", offline: "library", u: "library", p: "playlists", playlist: "playlists", artist: "artists" }[p0] || "home";
+}
+function pageTitle(p0) {
+  if (TABS.includes(p0) && p0 !== "playlists") return TAB_NAME[p0];
+  if (p0 === "playlists" || p0 === "economy") return "Playlists";
+  if (p0 === "search") return "Search";
+  const h = view().querySelector("h1"); const t = (h?.textContent || "").trim().replace(/\s+/g, " ");
+  return t.length > 42 ? t.slice(0, 40) + "…" : t;
+}
+function navChrome(p0) {
+  const top = NAV.stack[NAV.stack.length - 1], t = pageTitle(p0);
+  if (top && t) top.t = t;
+  document.title = t && p0 !== "home" ? `${t} · Splendor Music` : "Splendor Music";
+  const prev = NAV.stack[NAV.stack.length - 2], b = $("#back-btn");
+  if (b) { b.hidden = !prev || EMBED; if (prev) { $(".lbl", b).textContent = prev.t || "Back"; b.title = "Back to " + (prev.t || "the last page"); } }
+  navSave();
+}
+function restoreScroll(y, h) {
+  let stop = false; const cancel = () => stop = true;
+  ["wheel", "touchstart", "keydown"].forEach(ev => window.addEventListener(ev, cancel, { once: true, passive: true }));
+  window.scrollTo(0, y);
+  [60, 200, 450, 900, 1600].forEach(ms => setTimeout(() => { if (!stop && NAV.cur === h && Math.abs(window.scrollY - y) > 8) window.scrollTo(0, y); }, ms));
+}
+function setAmbient(img) {
+  const a = $("#ambient"); if (!a) return;
+  const u = img ? ipfs(img) : "";
+  if (u) { a.style.backgroundImage = `url("${u.replace(/["\\\n\r]/g, encodeURIComponent)}")`; a.classList.add("on"); } else a.classList.remove("on");
+}
+
 function route(keep) {
   closeModal();
+  if (typeof NP !== "undefined" && NP.open) npClose(true);
   let h; try { h = decodeURIComponent(location.hash.slice(1) || "/"); } catch { h = "/"; }
   const parts = h.split("/").filter(Boolean), p0 = parts[0] || "home", rest = parts.slice(1).join("/");
-  $$("nav a").forEach(a => a.classList.toggle("on", a.dataset.nav === p0 || (a.dataset.nav === "library" && (p0 === "pl" || p0 === "offline"))));
-  const sy = window.scrollY;
+  const hash = curHash(), sy = window.scrollY;
+  let restore = false;
+  if (!keep) {
+    if (NAV.cur && NAV.cur !== hash) NAV.scroll[NAV.cur] = sy;                       // remember where you were
+    const s = NAV.stack, prev = s[s.length - 2];
+    let tab;
+    if (prev && prev.h === hash) { s.pop(); restore = true; tab = NAV.next || prev.tab; NAV.next = ""; }   // Back: same tab + spot as before
+    else { tab = tabFor(p0); if (!s.length || s[s.length - 1].h !== hash) s.push({ h: hash, t: "", tab }); else s[s.length - 1].tab = tab; }
+    restore = (restore || NAV.restore) && !NAV.fresh; NAV.restore = false; NAV.fresh = false;
+    NAV.tab = tab || tabFor(p0); NAV.last[NAV.tab] = hash; NAV.cur = hash;
+    setAmbient(null);
+  }
+  $$("[data-nav]").forEach(a => a.classList.toggle("on", a.dataset.nav === NAV.tab && !a.classList.contains("brand")));
   if (p0 !== "search") $("#search").value = "";
   switch (p0) {
     case "home": home(); break;
@@ -1255,18 +1491,36 @@ function route(keep) {
     case "playlist": sharedView(b64e(JSON.stringify({ n: parts[1] || "Playlist", i: (parts[2] || "").split(",") }))); break;
     case "passport": passportPage(parts[1]); break;
     case "u": corner(parts[1]); break;
-    case "economy": economy(); break;
+    case "playlists": playlistsPage(parts[1]); break;
+    case "economy": playlistsPage("economy"); break;                       // old links still land in the right place
     case "search": search(rest); break;
     default: if (VIEWS[p0]) VIEWS[p0](parts, rest); else notFound();
   }
-  window.scrollTo(0, keep ? sy : 0);
+  if (keep) window.scrollTo(0, sy);
+  else if (restore && NAV.scroll[hash] > 0) restoreScroll(NAV.scroll[hash], hash);
+  else window.scrollTo(0, 0);
   markPlaying();
+  navChrome(p0); setTimeout(() => { if (NAV.cur === hash) navChrome(p0); }, 700);   // async pages fill their title a moment later
 }
 
 (async function main() {
-  initPlayer();
+  if ("scrollRestoration" in history) history.scrollRestoration = "manual";   // we restore scroll ourselves (per page)
+  initPlayer(); initNP();
   document.addEventListener("click", e => {
     const t = e.target;
+    // tabs (top nav, phone tab bar, logo): return to where you were in that tab; tap the current tab = its top
+    const nv = t.closest("a[data-nav]");
+    if (nv && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
+      const tab = nv.dataset.nav, root = TAB_ROOT[tab];
+      if (tab === NAV.tab || nv.classList.contains("brand")) {
+        if (curHash() === root) { e.preventDefault(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+        else { NAV.next = tab; NAV.fresh = true; }
+        return;
+      }
+      const last = NAV.last[tab]; NAV.restore = true; NAV.next = tab;
+      if (last && last !== curHash()) { e.preventDefault(); location.hash = last; }
+      return;
+    }
     const pr = t.closest("[data-playrel]"); if (pr) { e.preventDefault(); const r = relByKey.get(pr.dataset.playrel); if (r) playQueue(r.tracks); return; }
     const pp = t.closest("[data-playpl]"); if (pp) { e.preventDefault(); const p = PL.get(pp.dataset.playpl); if (p) playQueue(p.ids.map(i => byId.get(i))); return; }
     const pl = t.closest("[data-play]"); if (pl) { const box = pl.closest("[data-list]"), list = box && LISTS[box.dataset.list]; if (list) playQueue(list, +pl.dataset.play, box.dataset.ctx || ""); return; }

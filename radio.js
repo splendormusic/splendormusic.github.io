@@ -91,6 +91,7 @@ function stationPage(slug) {
       <div class="muted small">${plural(s.tracks.length, "song")} · ${plural(new Set(s.tracks.map(t => t.artist)).size, "artist")} · free to play</div>
       <div class="actions"><button class="btn big" data-station="${esc(s.slug)}">&#9654; Play station</button><button class="btn ghost" id="st-shuf">&#8644; Shuffle</button><button class="btn ghost" id="st-share">Share</button>${s.slug === "vibrr-radio" ? `<a class="btn ghost" href="https://vibrr.ai/radio" target="_blank" rel="noopener">Open Vibrr Radio ↗</a>` : ""}</div></div></section>
     ${listHead(s.head || "Why it's here")}<div class="tracks" data-list="station" data-ctx="${esc(s.ctx || "Splendor Radio · " + s.name)}">${s.tracks.map((t, i) => trackRow(t, i, { thumb: 1, artist: 1, meta: s.meta || (x => siPick(x).why.join(" · ") || "open-rules pick") })).join("")}</div>`;
+  if (s.tracks[0]) setAmbient(s.tracks[0].img);
   $("#st-shuf").onclick = () => playQueue(shuffled(s.tracks), 0, s.ctx || `Splendor Radio · ${s.name}`);
   $("#st-share").onclick = () => shareModal(`${s.name} on Splendor Radio`, location.href);
 }
