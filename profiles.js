@@ -15,8 +15,13 @@ His new album Splendor is a 12-track journey through wandering, grief, pressure,
 From the desert to the water, Splendor is about reclaiming the soul from false roles, fear, loneliness, and systems of control.`,
     banner: "img/lgs-banner.jpg",
     avatar: "img/lgs-avatar.jpg",
-    photoCredit: "Photos: Shaun Watson Photography",
-    photos: ["img/lgs-1.jpg", "img/lgs-2.jpg", "img/lgs-3.jpg", "img/lgs-4.jpg"],
+    // each photo carries its own credit, shown under the photo when it's opened
+    photos: [
+      { src: "img/lgs-1.jpg", credit: "Shaun Watson Photography" },
+      { src: "img/lgs-2.jpg", credit: "Shaun Watson Photography" },
+      { src: "img/lgs-3.jpg", credit: "Shaun Watson Photography" },
+      { src: "img/lgs-4.jpg", credit: "Shaun Watson Photography" }
+    ],
     links: {
       instagram: "https://www.instagram.com/lachlangrantsplendor",
       facebook: "https://www.facebook.com/profile.php?id=100089955953670",

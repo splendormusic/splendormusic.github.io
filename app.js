@@ -673,6 +673,7 @@ function artist(name) {
   const links = Object.entries(p.links || {}).map(([k, u]) => [k, safeHref(u)]).filter(([, u]) => u);
   const g = genresOf(a), fans = ARTISTS.filter(x => x !== a && [...genresOf(x)].some(y => g.has(y))).slice(0, 6);
   const norm = x => String(x || "").toLowerCase().replace(/[^a-z0-9]/g, ""), here = new Set(a.releases.map(r => norm(r.title)));
+  const photos = photoList(p);
   const notYet = (p.notYet || []).filter(e => e && e.title && !here.has(norm(e.title)));   // once it's minted here, it drops off
   const asks = store.get("asks", []), askKey = e => a.name + "|" + e.title;
   const videos = (p.videos || []).map(v => ({ id: String(v.id || "").match(/^[\w-]{11}$/)?.[0], title: String(v.title || ""), kind: String(v.kind || "") })).filter(v => v.id).slice(0, 24);
@@ -689,7 +690,6 @@ function artist(name) {
         <h1 class="ah-name">${esc(a.name)}</h1>
         ${p.tagline || p.location ? `<div class="ah-tag">${esc([p.tagline, p.location].filter(Boolean).join(" · "))}</div>` : ""}
         <div class="ah-stats"><span><b>${songCount(a)}</b> songs</span><span><b>${a.releases.length}</b> releases</span><span><b>${a.collected.toLocaleString()}</b> collected</span>${vrPlays ? `<span><b>${vrPlays.toLocaleString()}</b> Vibrr Radio plays</span>` : ""}</div></div></div>
-    ${banner && p.photoCredit ? `<span class="ah-credit">${esc(p.photoCredit)}</span>` : ""}
   </section>
   <div class="actions ah-actions"><button class="btn big" id="play-artist">&#9654; Play</button><button class="btn ghost" id="shuf-artist">&#8644; Shuffle</button>
     <button class="btn ghost${fol ? " on" : ""}" id="follow">${fol ? "✓ Following" : "+ Follow"}</button><button class="btn ghost" id="share-artist">Share</button>
@@ -700,6 +700,7 @@ function artist(name) {
     <button data-tool="share"><span>⤴</span><b>Share your page</b><small>Put it in your Instagram and Spotify bio</small></button>
     <div class="soon"><span>◎</span><b>Merch and collectables</b><small>Coming soon</small></div>
     <div class="soon"><span>🎟</span><b>Tour dates and tickets</b><small>Coming soon</small></div>
+    <div class="soon"><span>⤓</span><b>Press kit</b><small>Full-size photos, bio and music for press, on request. Coming soon</small></div>
     <a href="#/for-artists"><span>★</span><b>Everything you can do here</b><small>For artists</small></a></div></div>` : ""}
   <div class="subtabs"><button data-jump="popular" class="on">Popular</button><button data-jump="discography">Discography</button>${(p.videos || []).length ? `<button data-jump="videos">Videos</button>` : ""}<button data-jump="about">About</button>${fans.length ? `<button data-jump="fans">Fans also like</button>` : ""}</div>
   <div class="ah-top" id="popular">
@@ -723,7 +724,7 @@ function artist(name) {
   <div class="row-head" id="about"><h2>About</h2></div>
   <div class="about-grid">
     <div class="panel about-main">
-      ${(p.photos || []).length ? `<div class="gallery">${p.photos.map(imgUrl).filter(Boolean).map(s => `<img loading="lazy" src="${esc(s)}" alt="">`).join("")}</div>${p.photoCredit ? `<div class="muted small" style="margin:6px 0 0">${esc(p.photoCredit)}</div>` : ""}` : ""}
+      ${photos.length ? `<div class="gallery">${photos.map((ph, i) => `<button class="gimg" data-ph="${i}" title="Open photo"><img loading="lazy" src="${esc(ph.src)}" alt=""></button>`).join("")}</div>` : ""}
       ${p.bio ? `<div class="bio">${esc(p.bio)}</div>` : `<p class="muted">${esc(a.name)} hasn't written a bio yet.${owner ? " Add one with Edit artist page." : ""}</p>`}
       ${p.location ? `<div class="muted small" style="margin-top:12px">📍 ${esc(p.location)}</div>` : ""}
       ${social.length ? `<div class="sub-h" style="margin-top:18px">Follow</div><div class="lpills" id="ab-links">${linkPills(social)}</div>` : `<div class="lpills" id="ab-links"></div>`}
@@ -738,6 +739,7 @@ function artist(name) {
   $("#shuf-artist").onclick = () => playQueue(shuffled(all), 0, a.name);
   $("#follow").onclick = () => { const f = follows(), on = f.includes(a.name); store.set("follows", on ? f.filter(x => x !== a.name) : [...f, a.name]); toast(on ? `Unfollowed ${a.name}` : `Following ${a.name}`); route(true); };
   $("#share-artist").onclick = () => shareModal(`${a.name} on Splendor Music`, location.href);
+  $$("[data-ph]").forEach(b => b.onclick = () => lightbox(photos, +b.dataset.ph));
   $$("[data-tool]").forEach(b => b.onclick = () => b.dataset.tool === "edit" ? editArtist(a.name) : b.dataset.tool === "songs" ? editArtist(a.name, all[0]?.id) : shareModal(`${a.name} on Splendor Music`, location.href));
   $$("[data-ask]").forEach(b => b.onclick = () => { const k = b.dataset.ask, l = store.get("asks", []), on = l.includes(k); store.set("asks", on ? l.filter(x => x !== k) : [...l, k]);
     b.textContent = on ? "Ask for it" : "✓ Asked"; b.classList.toggle("on", !on);
@@ -778,6 +780,19 @@ async function chainSocials(a) {
     } catch {}
   }
   const el = $("#ab-links"); if (el && out.size) el.innerHTML = linkPills([...out.entries()]);
+}
+/* photos: { src, credit } (older profiles: plain strings + one photoCredit) */
+const photoList = p => (p.photos || []).map(ph => typeof ph === "string" ? { src: imgUrl(ph), credit: String(p.photoCredit || "").replace(/^Photos?:\s*/i, "") } : { src: imgUrl(ph?.src), credit: String(ph?.credit || "") }).filter(ph => ph.src);
+function lightbox(list, i) {
+  const bg = document.createElement("div"); bg.className = "lb-bg";
+  const show = () => { const ph = list[i]; bg.innerHTML = `<button class="lb-x" title="Close">&times;</button>
+    ${list.length > 1 ? `<button class="lb-nav prev" title="Previous">&#8249;</button><button class="lb-nav next" title="Next">&#8250;</button>` : ""}
+    <figure class="lb-fig"><img src="${esc(ph.src)}" alt=""><figcaption>${ph.credit ? `Photo: ${esc(ph.credit)}` : ""}<span class="muted">${i + 1} of ${list.length}</span></figcaption></figure>`;
+    $(".lb-x", bg).onclick = close; if (list.length > 1) { $(".prev", bg).onclick = e => { e.stopPropagation(); i = (i - 1 + list.length) % list.length; show(); }; $(".next", bg).onclick = e => { e.stopPropagation(); i = (i + 1) % list.length; show(); }; } };
+  const key = e => { if (e.key === "Escape") close(); else if (e.key === "ArrowRight" && list.length > 1) { i = (i + 1) % list.length; show(); } else if (e.key === "ArrowLeft" && list.length > 1) { i = (i - 1 + list.length) % list.length; show(); } };
+  function close() { document.removeEventListener("keydown", key); bg.parentNode && bg.parentNode.removeChild(bg); }
+  bg.onclick = e => { if (e.target === bg) close(); };
+  document.addEventListener("keydown", key); document.body.append(bg); show();
 }
 /* upload + crop: you see exactly how the photo will sit (circle for the profile photo, wide for the banner) */
 const CROP = { avatar: { aspect: 1, w: 640, round: true, label: "Centre your face in the circle" }, banner: { aspect: 3, w: 2400, label: "Frame your banner (your name sits bottom left)" },
@@ -837,7 +852,6 @@ function editArtist(name, focusTid) {
       <div class="up-row"><div class="up-prev round" id="ea-av-prev"></div><div><b>Profile photo</b><small class="muted">Shown in a circle: you'll centre it</small>
         <div class="row"><button class="btn ghost sm" data-up="avatar">Upload and crop</button><button class="btn ghost sm" data-clear="avatar">Remove</button></div></div></div>
       <div><b style="font-size:14px">Gallery</b> <small class="muted">up to 6</small><div class="up-gallery" id="ea-gal"></div></div>
-      <label>Photo credit (optional)<input id="ea-credit" maxlength="120" value="${esc(p.photoCredit || "")}" placeholder="Photos: your photographer"></label>
       <label>YouTube videos (one link per line)<textarea id="ea-vids" rows="3" placeholder="https://youtu.be/...">${esc((p.videos || []).map(v => "https://youtu.be/" + v.id).join("\n"))}</textarea></label>
       <div class="sub-h">Links</div>
       <div class="link-grid">${keys.map(k => `<label>${esc(LINK_NAMES[k] || k)}<input data-link="${k}" value="${esc(p.links?.[k] || "")}" placeholder="https://"></label>`).join("")}</div>
@@ -855,14 +869,15 @@ function editArtist(name, focusTid) {
     <div class="m-foot"><button class="btn ghost" data-mclose>Cancel</button><button class="btn" id="ea-save">Save</button></div>`, "wide sheet");
   const saved = store.get("profile:" + name, null) || {};
   const draft = { lyrics: { ...(saved.lyrics || {}) }, stories: { ...(saved.stories || {}) }, credits: { ...(saved.credits || {}) }, albumCredits: { ...(saved.albumCredits || {}) },
-                  banner: p.banner || "", avatar: p.avatar || "", photos: (p.photos || []).slice(0, 6) };
+                  banner: p.banner || "", avatar: p.avatar || "", photos: photoList(p).slice(0, 6).map(ph => ({ ...ph })) };
   const drawPics = () => {
     $("#ea-banner-prev", m).style.backgroundImage = draft.banner ? cssUrl(imgUrl(draft.banner)) : "";
     $("#ea-av-prev", m).style.backgroundImage = draft.avatar ? cssUrl(imgUrl(draft.avatar)) : "";
-    $("#ea-gal", m).innerHTML = draft.photos.map((ph, i) => `<span class="gthumb" style="background-image:${esc(cssUrl(imgUrl(ph)))}"><button data-gx="${i}" title="Remove">&#10005;</button></span>`).join("")
+    $("#ea-gal", m).innerHTML = draft.photos.map((ph, i) => `<span class="gitem"><span class="gthumb" style="background-image:${esc(cssUrl(ph.src))}"><button data-gx="${i}" title="Remove">&#10005;</button></span><input class="gcredit" data-gc="${i}" maxlength="80" placeholder="Photographer" value="${esc(ph.credit || "")}"></span>`).join("")
       + (draft.photos.length < 6 ? `<button class="gadd" data-up="photo">+ Add</button>` : "");
     $$("[data-gx]", m).forEach(b => b.onclick = () => { draft.photos.splice(+b.dataset.gx, 1); drawPics(); });
-    $$("[data-up]", m).forEach(b => b.onclick = () => pickImage(b.dataset.up).then(url => { if (!url) return; if (b.dataset.up === "photo") draft.photos.push(url); else draft[b.dataset.up] = url; drawPics(); }));
+    $$("[data-gc]", m).forEach(inp => inp.oninput = () => { draft.photos[+inp.dataset.gc].credit = inp.value.trim(); });
+    $$("[data-up]", m).forEach(b => b.onclick = () => pickImage(b.dataset.up).then(url => { if (!url) return; if (b.dataset.up === "photo") draft.photos.push({ src: url, credit: "" }); else draft[b.dataset.up] = url; drawPics(); }));
   };
   $$("[data-clear]", m).forEach(b => b.onclick = () => { draft[b.dataset.clear] = ""; drawPics(); });
   drawPics();
@@ -883,7 +898,7 @@ function editArtist(name, focusTid) {
     const videos = $("#ea-vids", m).value.split(/\s+/).map(u => (u.match(/(?:youtu\.be\/|v=|embed\/|shorts\/)([\w-]{11})/) || [])[1]).filter(Boolean).map(id => ({ id, title: (p.videos || []).find(v => v.id === id)?.title || "Video" }));
     try {
       store.set("profile:" + name, { tagline: $("#ea-tag", m).value.trim(), location: $("#ea-loc", m).value.trim(), bio: $("#ea-bio", m).value.trim(),
-        banner: draft.banner, avatar: draft.avatar, photos: draft.photos, photoCredit: $("#ea-credit", m).value.trim(), videos, links, pick, lyrics: draft.lyrics, stories: draft.stories, credits: draft.credits, albumCredits: draft.albumCredits });
+        banner: draft.banner, avatar: draft.avatar, photos: draft.photos, photoCredit: "", videos, links, pick, lyrics: draft.lyrics, stories: draft.stories, credits: draft.credits, albumCredits: draft.albumCredits });
       if (!localStorage.getItem("profile:" + name)) throw new Error("full");
     } catch { toast("Couldn't save: this device is out of space for photos. Try fewer gallery photos."); return; }
     MODAL_DIRTY = true; closeModal(); toast("Artist page saved");
@@ -1030,7 +1045,8 @@ async function passportPage(id) {
         <div class="owner"><div class="sym">℗</div><div class="what">The recording (master)</div><div class="who">${esc(pl.who || "Not declared")}</div><div class="yr">${pl.year ? "since " + esc(pl.year) : ""}</div></div>
         <div class="owner"><div class="sym">©</div><div class="what">The song (composition)</div><div class="who">${esc(cl.who || "Not declared")}</div><div class="yr">${cl.year ? "since " + esc(cl.year) : ""}</div></div>
       </div>
-      <p class="muted small" style="margin:12px 0 0">${d.license ? `Licence: <b style="color:var(--text)">${esc(d.license)}</b>. ` : ""}Owning a copy of this NFT makes you a collector and supporter. The copyrights stay with the owners above.</p>
+      <p class="muted small" style="margin:12px 0 0">Owning a copy makes you a collector and supporter. The copyrights stay with the owners above.</p>
+      <div class="licence-note"><b>Want to use this song?</b> For a film, ad, game, video, remix, sample or cover, ask ${esc(t.artist)} first. Licensing requests through Splendor Music are coming.</div>
     </div>
     <div class="panel"><h2>Who made it</h2>
       ${credits.length ? `<div class="credits">${credits.map(c => `<div class="role">${esc(c.role || "Credit")}</div><div class="who">${esc(c.who)}</div>`).join("")}</div>` : `<p class="muted">No credits listed yet.</p>`}
@@ -1041,11 +1057,9 @@ async function passportPage(id) {
       <div class="panel wide lyrics-panel" id="lyrics"><h2>Lyrics</h2>${L.lyrics ? `<div class="lyrics">${esc(L.lyrics)}</div>` : `<p class="muted" style="margin:0">No lyrics yet. When ${esc(t.artist)} adds them, they show here and in Now Playing.</p>`}
       ${own ? `<button class="btn ghost sm" style="margin-top:14px" data-editlyrics="${esc(t.id)}">✎ ${L.lyrics ? "Edit" : "Add"} lyrics, credits and about</button>` : ""}</div>`; })()}
     <div class="panel wide"><h2>How each sale is shared</h2><div id="paid"><span class="muted">Checking…</span></div></div>
-    <div class="panel"><h2>What you can do with it</h2>
-      ${perms.length ? `<div class="perms">${perms.map(([n, k, s]) => `<div class="perm ${yes(d[k]) ? "y" : "n"}"><span class="i">${yes(d[k]) ? "✓" : "✕"}</span><span><b>${n}</b><small>${s} · ${yes(d[k]) ? "allowed" : "ask the owner first"}</small></span></div>`).join("")}</div>` : `<p class="muted">The artist hasn't set permissions yet.</p>`}
-    </div>
     <details class="panel wide tech"><summary>Technical details <span class="muted small">codes, files and wallets, for the curious</span></summary><div class="kv" style="margin-top:14px">
-      ${kv("ISRC", d.isrc, 1)}${kv("UPC", d.upc, 1)}${kv("Template", t.id, 1)}${kv("Collection", t.collection, 1)}${kv("Schema", t.schema)}${kv("Created by wallet", t.author)}<div class="k">Passport code</div><div class="v"><span class="mono small" style="white-space:pre;overflow-x:auto;display:block">${esc(m1)}\n${esc(m2)}</span><small class="muted">A machine-readable line, like the one on a real passport</small></div>
+      ${kv("ISRC", d.isrc, 1)}${kv("UPC", d.upc, 1)}${kv("Template", t.id, 1)}${kv("Collection", t.collection, 1)}${kv("Schema", t.schema)}${kv("Created by wallet", t.author)}${kv("Licence", d.license && d.license !== "None" ? d.license : "")}
+      ${perms.length ? `<div class="k">Permission settings</div><div class="v"><span>${perms.map(([n, k]) => `${n}: ${yes(d[k]) ? "open to it" : "ask first"}`).join(" · ")}<br><small class="muted">What the artist ticked when minting. Always ask the artist before using the song.</small></span></div>` : ""}<div class="k">Passport code</div><div class="v"><span class="mono small" style="white-space:pre;overflow-x:auto;display:block">${esc(m1)}\n${esc(m2)}</span><small class="muted">A machine-readable line, like the one on a real passport</small></div>
       ${con.length ? `<div class="k">On-chain contributors</div><div class="v">${con.map(c => `${esc(c.w)} (${esc(c.r || "Contributor")}${c.s ? ` ${esc(c.s)}%` : ""})`).join(", ")}</div>` : ""}
       ${kv("Genre", d.genre && String(d.genre).replace(/\|/g, " · "))}${kv("Mood", d.mood && String(d.mood).replace(/\|/g, " · "))}${kv("BPM", d.bpm)}${kv("Key", d.key)}${kv("Language", d.language)}${kv("Format", d.format)}
       ${kv("Track", d.track)}${kv("Released", d.released && relDate(d.released))}
