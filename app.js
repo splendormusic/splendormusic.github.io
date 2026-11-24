@@ -1,4 +1,4 @@
-/* Splendor Music: prototype v0.6.0 (24 Nov 2026: artist pages, lyrics, Haze + logo; v0.5.0: Playlists tab + briefs, brand fonts, Now Playing, back nav; v0.4.4: Vibrr listening copies, real album names, live Vibrr Radio station)
+/* Splendor Music: prototype v0.7.0 (24 Nov 2026: photo upload + crop, not-yet releases + asks, videos, industry-standard titles; v0.6.0: artist pages, lyrics, Haze + logo; v0.5.0: Playlists tab + briefs, brand fonts, Now Playing, back nav; v0.4.4: Vibrr listening copies, real album names, live Vibrr Radio station)
    Concept + product design: Lachlan Grant Splendor (Vibrr Music / Music Passport; X post 15 Sep 2026; the
    playlisting economy). "Mint on Vibrr. Listen, share and earn on Splendor Music."
    Data: public XPR Network chain data only: AtomicAssets (Vibrr's music schema "cxcmus"), Vibrr's split contract
@@ -557,9 +557,10 @@ function home() {
   TRACKS.forEach(t => String(t.d.genre || "").split(/[|,/]/).map(g => g.trim()).filter(g => g && g.length < 24).forEach(g => gc.set(g, (gc.get(g) || 0) + 1)));
   const genres = [...gc.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12).map(x => x[0]);
   view().innerHTML = `
-    <section class="hero"><div class="eyebrow">Splendor Music · built on the XPR Network</div>
-      <h1>Mint on Vibrr. Listen here. Share it, and everyone who helped earns.</h1>
-      <p>Every song is a Music NFT with its Music Passport built in: who made it, who owns it, who gets paid. Play releases in order, build playlists from the music you love, and pass them on.</p>
+    <section class="hero"><div class="eyebrow">Splendor Music · on the XPR Network</div>
+      <h1>Hear it. Own it. Pass it on.</h1>
+      <p class="hero-sub">Music you keep, from artists you pay directly.</p>
+      <p>Every song carries its Music Passport: who made it, who owns it, who gets paid. Mint on Vibrr, listen here, and when you share it, everyone who helped earns.</p>
       <div class="stats"><div class="stat"><b>${RELEASES.length}</b><span>releases</span></div><div class="stat"><b>${TRACKS.length}</b><span>songs</span></div><div class="stat"><b>${ARTISTS.length}</b><span>artists</span></div><div class="stat"><b>${minted.toLocaleString()}</b><span>copies minted</span></div></div></section>
     ${recRels.length ? `<div class="row-head"><h2>Jump back in</h2></div><div class="grid">${recRels.map(relCard).join("")}</div>` : ""}
     <div class="row-head"><h2>Latest releases</h2><span class="muted">${plural(RELEASES.length, "release")}</span></div>
@@ -572,7 +573,7 @@ function home() {
     <div class="row-head"><h2>Artists to discover</h2><a class="muted" href="#/artists">All artists</a></div>
     <div class="grid">${rising.map(artistCard).join("")}</div>
     ${typeof radioStations === "function" ? `<div class="row-head"><h2>Splendor Radio</h2><a class="muted" href="#/radio">Free listening, open rules →</a></div><div class="grid">${radioStations().slice(0, 4).map(stationCard).join("")}</div>` : ""}
-    <a class="econ-banner" href="#/playlists"><div><div class="eyebrow">For curators</div><h2>Your taste is worth something</h2><div class="muted">Build playlists, answer the weekly brief, and earn when listeners collect the songs you found.</div></div><span class="btn">Become a curator</span></a>
+    <a class="econ-banner" href="#/playlists"><div><div class="eyebrow">For curators</div><h2>Good taste pays</h2><div class="muted">Build playlists, answer the weekly brief, and earn when listeners collect the songs you found.</div></div><span class="btn">Become a curator</span></a>
     <div class="foot">Splendor Music · concept and product design by Lachlan Grant Splendor · live data from the XPR Network · <a href="#/trust" style="color:var(--accent)">Trust &amp; safety</a></div>`;
   $$("#genres [data-g]").forEach(b => b.onclick = () => {
     $$("#genres .chip").forEach(c => c.classList.toggle("on", c === b));
@@ -617,7 +618,7 @@ function profileOf(name) {
   return { ...base, ...mine, links: { ...(base.links || {}), ...(mine.links || {}) }, lyrics: { ...(base.lyrics || {}), ...(mine.lyrics || {}) },
            stories: { ...(base.stories || {}), ...(mine.stories || {}) }, releaseDates: { ...(base.releaseDates || {}), ...(mine.releaseDates || {}) } };
 }
-const imgUrl = s => !s ? "" : /^(img|icons)\/[\w./-]+$/.test(s) ? s : ipfs(s);      // our own asset, an IPFS CID, or an https image
+const imgUrl = s => !s ? "" : /^(img|icons)\/[\w./-]+$/.test(s) || /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(s) ? s : ipfs(s);   // our asset, an upload, an IPFS CID or an https image
 const safeHref = u => /^https?:\/\/[^\s"'<>]+$/i.test(String(u || "").trim()) ? String(u).trim() : "";
 function lyricsOf(t) { const p = profileOf(t.artist); return { lyrics: String(p.lyrics?.[t.id] || t.d.lyrics || "").trim(), story: String(p.stories?.[t.id] || "").trim() }; }
 const artistOf = t => ARTISTS.find(a => a.name === t.artist);
@@ -643,11 +644,12 @@ function artist(name) {
   const banner = imgUrl(p.banner), avatar = imgUrl(p.avatar) || ipfs(a.img);
   const links = Object.entries(p.links || {}).map(([k, u]) => [k, safeHref(u)]).filter(([, u]) => u);
   const g = genresOf(a), fans = ARTISTS.filter(x => x !== a && [...genresOf(x)].some(y => g.has(y))).slice(0, 6);
-  const elsewhere = (p.elsewhere || []).filter(e => e && e.title);
+  const notYet = (p.notYet || []).filter(e => e && e.title), asks = store.get("asks", []), askKey = e => a.name + "|" + e.title;
+  const videos = (p.videos || []).map(v => ({ id: String(v.id || "").match(/^[\w-]{11}$/)?.[0], title: String(v.title || "") })).filter(v => v.id);
+  const social = links.filter(([k]) => !(typeof STREAMING !== "undefined" ? STREAMING : []).includes(k)), streaming = links.filter(([k]) => (typeof STREAMING !== "undefined" ? STREAMING : []).includes(k));
   const card = (r, label) => `<a class="pick-card" href="#/release/${enc(r.key)}"><img src="${esc(ipfs(r.img))}" alt=""><span><span class="eyebrow">${label}</span><b>${esc(r.title)}</b><small>${relKind(r)} · ${esc(relYear(r))} · ${plural(r.tracks.length, "song")}</small>${label === "Artist Pick" && p.pick?.note ? `<em>“${esc(p.pick.note)}”</em>` : ""}</span></a>`;
   const discCards = k => [
-    ...(k === "elsewhere" ? [] : rels.filter(r => !k || relKind(r) === k).map(r => `<a class="card" href="#/release/${enc(r.key)}"><div class="art"><img loading="lazy" src="${esc(ipfs(r.img))}" alt=""><button class="fab" data-playrel="${esc(r.key)}" title="Play ${esc(r.title)}">&#9654;</button></div><div class="c"><div class="t">${esc(r.title)}</div><div class="a">${esc(relYear(r))} · ${relKind(r)}</div></div></a>`)),
-    ...(!k || k === "elsewhere" ? elsewhere.map(e => { const first = Object.values(e.links || {}).map(safeHref).find(Boolean) || "#"; return `<a class="card" target="_blank" rel="noopener" href="${esc(first)}"><div class="art"><img loading="lazy" src="${esc(imgUrl(e.img))}" alt=""><span class="not-minted">Out everywhere</span></div><div class="c"><div class="t">${esc(e.title)}</div><div class="a">${esc(String(e.released || "").slice(0, 4))} · ${esc(e.type || "Release")} · not minted yet</div></div></a>`; }) : [])
+    ...(rels.filter(r => !k || relKind(r) === k).map(r => `<a class="card" href="#/release/${enc(r.key)}"><div class="art"><img loading="lazy" src="${esc(ipfs(r.img))}" alt=""><button class="fab" data-playrel="${esc(r.key)}" title="Play ${esc(r.title)}">&#9654;</button></div><div class="c"><div class="t">${esc(r.title)}</div><div class="a">${esc(relYear(r))} · ${relKind(r)}</div></div></a>`))
   ].join("") || `<p class="muted">Nothing here yet.</p>`;
   view().innerHTML = `
   <section class="artist-hero${banner ? " has-banner" : ""}" style="--ab:${esc(cssUrl(banner || ipfs(a.img)))}">
@@ -661,30 +663,30 @@ function artist(name) {
   <div class="actions ah-actions"><button class="btn big" id="play-artist">&#9654; Play</button><button class="btn ghost" id="shuf-artist">&#8644; Shuffle</button>
     <button class="btn ghost${fol ? " on" : ""}" id="follow">${fol ? "✓ Following" : "+ Follow"}</button><button class="btn ghost" id="share-artist">Share</button>
     ${owner ? `<button class="btn ghost" id="edit-artist">✎ Edit artist page</button>` : ""}</div>
-  <div class="subtabs"><button data-jump="popular" class="on">Popular</button><button data-jump="discography">Discography</button><button data-jump="about">About</button>${fans.length ? `<button data-jump="fans">Fans also like</button>` : ""}</div>
+  <div class="subtabs"><button data-jump="popular" class="on">Popular</button><button data-jump="discography">Discography</button>${(p.videos || []).length ? `<button data-jump="videos">Videos</button>` : ""}<button data-jump="about">About</button>${fans.length ? `<button data-jump="fans">Fans also like</button>` : ""}</div>
   <div class="ah-top" id="popular">
     <div><h2>Popular</h2><div class="tracks" data-list="popular" id="pop-list">${popular.slice(0, 5).map((t, i) => trackRow(t, i, { thumb: 1, meta: popMeta })).join("")}</div>
       ${popular.length > 5 ? `<button class="btn ghost sm" id="pop-more">Show 5 more</button>` : ""}</div>
     <div class="ah-side">${pickRel ? card(pickRel, "Artist Pick") : ""}${(() => {
-      // latest = newest release with a real release date, minted or out everywhere (mint dates alone don't count)
-      const known = rels.filter(relDateKnown).map(r => ({ d: relDateOf(r), r })), out = elsewhere.filter(e => e.released).map(e => ({ d: String(e.released), e }));
-      const top = [...known, ...out].sort((x, y) => y.d.localeCompare(x.d))[0];
-      if (!top) return rels[0] && rels[0] !== pickRel ? card(rels[0], "Latest release") : "";
-      if (top.r) return top.r !== pickRel ? card(top.r, "Latest release") : "";
-      const e = top.e, href = Object.values(e.links || {}).map(safeHref).find(Boolean) || "#";
-      return `<a class="pick-card" target="_blank" rel="noopener" href="${esc(href)}"><img src="${esc(imgUrl(e.img))}" alt=""><span><span class="eyebrow">Latest release</span><b>${esc(e.title)}</b><small>${esc(e.type || "Release")} · ${esc(relDate(e.released))} · out everywhere</small><em>${Object.keys(e.links || {}).filter(k => safeHref(e.links[k])).map(k => esc(LINK_NAMES[k] || k)).join(" · ")}</em></span></a>`;
+      // latest release on Splendor Music (a real release date beats a mint date)
+      const latest = rels.filter(relDateKnown)[0] || rels[0];
+      return latest && latest !== pickRel ? card(latest, "Latest release") : "";
     })()}</div>
   </div>
   <div class="row-head" id="discography"><h2>Discography</h2></div>
-  <div class="chips" id="disc-chips"><button class="chip on" data-k="">All</button>${["Album", "EP", "Single"].filter(k => rels.some(r => relKind(r) === k)).map(k => `<button class="chip" data-k="${k}">${k === "Album" ? "Albums" : k === "EP" ? "EPs" : "Singles"}</button>`).join("")}${elsewhere.length ? `<button class="chip" data-k="elsewhere">Out everywhere</button>` : ""}</div>
+  <div class="chips" id="disc-chips"><button class="chip on" data-k="">All</button>${["Album", "EP", "Single"].filter(k => rels.some(r => relKind(r) === k)).map(k => `<button class="chip" data-k="${k}">${k === "Album" ? "Albums" : k === "EP" ? "EPs" : "Singles"}</button>`).join("")}</div>
   <div class="grid" id="disc">${discCards("")}</div>
+  ${notYet.length ? `<div class="row-head" id="notyet"><div><h2>Not on Splendor Music yet</h2><div class="muted small">Out on streaming, waiting to be minted. Ask for the ones you'd collect: it tells ${esc(a.name)} what to mint next.</div></div></div>
+  <div class="notyet">${notYet.map(e => { const on = asks.includes(askKey(e)); return `<div class="ny"><img loading="lazy" src="${esc(imgUrl(e.img))}" alt=""><span class="ny-t"><b>${esc(e.title)}</b><small>${esc(e.type || "Release")} · ${esc(String(e.released || "").slice(0, 4))}</small></span><button class="btn ${on ? "ghost on" : "ghost"} sm" data-ask="${esc(askKey(e))}">${on ? "✓ Asked" : "Ask for it"}</button></div>`; }).join("")}</div>` : ""}
+  ${videos.length ? `<div class="row-head" id="videos"><h2>Videos</h2></div><div class="videos">${videos.map(v => `<button class="vid" data-yt="${esc(v.id)}" title="${esc(v.title)}"><img loading="lazy" src="https://i.ytimg.com/vi/${esc(v.id)}/hqdefault.jpg" alt=""><span class="vplay">&#9654;</span><span class="vt">${esc(v.title)}</span></button>`).join("")}</div>` : ""}
   <div class="row-head" id="about"><h2>About</h2></div>
   <div class="about-grid">
     <div class="panel about-main">
       ${(p.photos || []).length ? `<div class="gallery">${p.photos.map(imgUrl).filter(Boolean).map(s => `<img loading="lazy" src="${esc(s)}" alt="">`).join("")}</div>${p.photoCredit ? `<div class="muted small" style="margin:6px 0 0">${esc(p.photoCredit)}</div>` : ""}` : ""}
       ${p.bio ? `<div class="bio">${esc(p.bio)}</div>` : `<p class="muted">${esc(a.name)} hasn't written a bio yet.${owner ? " Add one with Edit artist page." : ""}</p>`}
       ${p.location ? `<div class="muted small" style="margin-top:12px">📍 ${esc(p.location)}</div>` : ""}
-      <div class="lpills" id="ab-links">${linkPills(links)}</div></div>
+      ${social.length ? `<div class="sub-h" style="margin-top:18px">Follow</div><div class="lpills" id="ab-links">${linkPills(social)}</div>` : `<div class="lpills" id="ab-links"></div>`}
+      ${streaming.length ? `<div class="sub-h" style="margin-top:14px">Also on</div><div class="lpills">${linkPills(streaming)}</div>` : ""}</div>
     <div class="panel"><h3 style="margin-top:0">Support ${esc(a.name)}</h3>
       <p class="muted" style="margin-top:0">Collect a song and the artist is paid in the same transaction, through the split on their Music Passport. No middleman takes a cut, and you keep the song.</p>
       <a class="btn" target="_blank" rel="noopener" href="https://vibrr.ai/vibrr-market/collection/${enc(rels[0]?.collection || "")}">Collect on Vibrr ↗</a>
@@ -696,6 +698,10 @@ function artist(name) {
   $("#follow").onclick = () => { const f = follows(), on = f.includes(a.name); store.set("follows", on ? f.filter(x => x !== a.name) : [...f, a.name]); toast(on ? `Unfollowed ${a.name}` : `Following ${a.name}`); route(true); };
   $("#share-artist").onclick = () => shareModal(`${a.name} on Splendor Music`, location.href);
   if ($("#edit-artist")) $("#edit-artist").onclick = () => editArtist(a.name);
+  $$("[data-ask]").forEach(b => b.onclick = () => { const k = b.dataset.ask, l = store.get("asks", []), on = l.includes(k); store.set("asks", on ? l.filter(x => x !== k) : [...l, k]);
+    b.textContent = on ? "Ask for it" : "✓ Asked"; b.classList.toggle("on", !on); if (!on) toast(`Asked ${a.name} to mint “${k.split("|")[1]}”. Prototype: artists see asks once profiles are live on Vibrr.`); });
+  $$("[data-yt]").forEach(b => b.onclick = () => { P.audio?.pause(); const f = document.createElement("iframe"); f.className = "vid-frame"; f.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen"; f.allowFullscreen = true;
+    f.src = `https://www.youtube-nocookie.com/embed/${b.dataset.yt}?autoplay=1&rel=0`; b.replaceWith(f); });
   if ($("#pop-more")) $("#pop-more").onclick = e => { $("#pop-list").innerHTML = popular.map((t, i) => trackRow(t, i, { thumb: 1, meta: popMeta })).join(""); e.target.remove(); markPlaying(); };
   $$("#disc-chips [data-k]").forEach(b => b.onclick = () => { $$("#disc-chips .chip").forEach(c => c.classList.toggle("on", c === b)); $("#disc").innerHTML = discCards(b.dataset.k); });
   $$(".subtabs [data-jump]").forEach(b => b.onclick = () => { $$(".subtabs button").forEach(x => x.classList.toggle("on", x === b)); $("#" + b.dataset.jump)?.scrollIntoView({ behavior: "smooth", block: "start" }); });
@@ -717,6 +723,49 @@ async function chainSocials(a) {
   }
   const el = $("#ab-links"); if (el && out.size) el.innerHTML = linkPills([...out.entries()]);
 }
+/* upload + crop: you see exactly how the photo will sit (circle for the profile photo, wide for the banner) */
+const CROP = { avatar: { aspect: 1, w: 640, round: true, label: "Centre your face in the circle" }, banner: { aspect: 3, w: 2400, label: "Frame your banner (your name sits bottom left)" },
+               photo: { aspect: 4 / 3, w: 1400, label: "Frame your photo" } };
+function pickImage(kind) {
+  return new Promise(done => {
+    const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/jpeg,image/png,image/webp";
+    inp.onchange = () => { const f = inp.files?.[0]; if (!f) return done(""); if (f.size > 25e6) { toast("That image is over 25 MB"); return done(""); } cropImage(f, CROP[kind]).then(done); };
+    inp.click();
+  });
+}
+function cropImage(file, o) {
+  return new Promise(done => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      const bg = document.createElement("div"); bg.className = "crop-bg";
+      bg.innerHTML = `<div class="crop-box"><div class="m-head"><div><h3>${esc(o.label)}</h3><div class="muted small">Drag to move · slide to zoom</div></div></div>
+        <div class="crop-frame${o.round ? " round" : ""}" style="aspect-ratio:${o.aspect}"><img alt=""></div>
+        <input type="range" class="crop-zoom" min="1" max="4" step="0.01" value="1">
+        <div class="m-foot"><button class="btn ghost" data-c="no">Cancel</button><button class="btn" data-c="ok">Use photo</button></div></div>`;
+      document.body.append(bg);
+      const fr = $(".crop-frame", bg), im = $("img", fr); im.src = url;
+      let z = 1, x = 0, y = 0;
+      const dims = () => { const W = fr.clientWidth, H = fr.clientHeight, base = Math.max(W / img.naturalWidth, H / img.naturalHeight), sc = base * z; return { W, H, s: sc, w: img.naturalWidth * sc, h: img.naturalHeight * sc }; };
+      const clamp = () => { const d = dims(); x = Math.min(0, Math.max(d.W - d.w, x)); y = Math.min(0, Math.max(d.H - d.h, y)); };
+      const draw = () => { clamp(); const d = dims(); Object.assign(im.style, { width: d.w + "px", height: d.h + "px", transform: `translate(${x}px,${y}px)` }); };
+      requestAnimationFrame(() => { const d = dims(); x = (d.W - d.w) / 2; y = (d.H - d.h) / 2; draw(); });
+      $(".crop-zoom", bg).oninput = e => { const d0 = dims(), cx = (d0.W / 2 - x) / d0.s, cy = (d0.H / 2 - y) / d0.s; z = +e.target.value; const d = dims(); x = d.W / 2 - cx * d.s; y = d.H / 2 - cy * d.s; draw(); };
+      let drag = null;
+      fr.onpointerdown = e => { drag = { px: e.clientX, py: e.clientY, x, y }; fr.setPointerCapture(e.pointerId); };
+      fr.onpointermove = e => { if (!drag) return; x = drag.x + e.clientX - drag.px; y = drag.y + e.clientY - drag.py; draw(); };
+      fr.onpointerup = fr.onpointercancel = () => { drag = null; };
+      const end = v => { bg.parentNode && bg.parentNode.removeChild(bg); URL.revokeObjectURL(url); done(v); };
+      $("[data-c=no]", bg).onclick = () => end("");
+      $("[data-c=ok]", bg).onclick = () => {
+        const d = dims(), outW = o.w, outH = Math.round(o.w / o.aspect), c = document.createElement("canvas"); c.width = outW; c.height = outH;
+        c.getContext("2d").drawImage(img, -x / d.s, -y / d.s, d.W / d.s, d.H / d.s, 0, 0, outW, outH);
+        end(c.toDataURL("image/jpeg", 0.82));
+      };
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); toast("Couldn't read that image"); done(""); };
+    img.src = url;
+  });
+}
 /* the artist edits their own page: bio, photos, links, Artist Pick, lyrics and song stories */
 function editArtist(name, focusTid) {
   const a = ARTISTS.find(x => x.name === name); if (!a) return;
@@ -726,8 +775,14 @@ function editArtist(name, focusTid) {
       <label>Tagline<input id="ea-tag" maxlength="90" value="${esc(p.tagline || "")}" placeholder="One line about your music"></label>
       <label>Location<input id="ea-loc" maxlength="80" value="${esc(p.location || "")}"></label>
       <label>Bio<textarea id="ea-bio" rows="7" maxlength="3000">${esc(p.bio || "")}</textarea></label>
-      <label>Banner image (https link or IPFS CID)<input id="ea-banner" value="${esc(p.banner || "")}"></label>
-      <label>Profile photo (https link or IPFS CID)<input id="ea-av" value="${esc(p.avatar || "")}"></label>
+      <div class="sub-h">Photos</div>
+      <div class="up-row"><div class="up-prev banner" id="ea-banner-prev"></div><div><b>Banner</b><small class="muted">Wide photo across the top of your page</small>
+        <div class="row"><button class="btn ghost sm" data-up="banner">Upload and crop</button><button class="btn ghost sm" data-clear="banner">Remove</button></div></div></div>
+      <div class="up-row"><div class="up-prev round" id="ea-av-prev"></div><div><b>Profile photo</b><small class="muted">Shown in a circle: you'll centre it</small>
+        <div class="row"><button class="btn ghost sm" data-up="avatar">Upload and crop</button><button class="btn ghost sm" data-clear="avatar">Remove</button></div></div></div>
+      <div><b style="font-size:14px">Gallery</b> <small class="muted">up to 6</small><div class="up-gallery" id="ea-gal"></div></div>
+      <label>Photo credit (optional)<input id="ea-credit" maxlength="120" value="${esc(p.photoCredit || "")}" placeholder="Photos: your photographer"></label>
+      <label>YouTube videos (one link per line)<textarea id="ea-vids" rows="3" placeholder="https://youtu.be/...">${esc((p.videos || []).map(v => "https://youtu.be/" + v.id).join("\n"))}</textarea></label>
       <div class="sub-h">Links</div>
       <div class="link-grid">${keys.map(k => `<label>${esc(LINK_NAMES[k] || k)}<input data-link="${k}" value="${esc(p.links?.[k] || "")}" placeholder="https://"></label>`).join("")}</div>
       <div class="sub-h">Artist Pick</div>
@@ -740,7 +795,18 @@ function editArtist(name, focusTid) {
       <p class="muted small" style="margin:0">Prototype: your changes are saved on this device and show straight away. Publishing them for every listener comes with signed artist profiles on Vibrr.</p>
     </div>
     <div class="m-foot"><button class="btn ghost" data-mclose>Cancel</button><button class="btn" id="ea-save">Save</button></div>`, "wide sheet");
-  const draft = { lyrics: { ...(store.get("profile:" + name, null)?.lyrics || {}) }, stories: { ...(store.get("profile:" + name, null)?.stories || {}) } };
+  const draft = { lyrics: { ...(store.get("profile:" + name, null)?.lyrics || {}) }, stories: { ...(store.get("profile:" + name, null)?.stories || {}) },
+                  banner: p.banner || "", avatar: p.avatar || "", photos: (p.photos || []).slice(0, 6) };
+  const drawPics = () => {
+    $("#ea-banner-prev", m).style.backgroundImage = draft.banner ? cssUrl(imgUrl(draft.banner)) : "";
+    $("#ea-av-prev", m).style.backgroundImage = draft.avatar ? cssUrl(imgUrl(draft.avatar)) : "";
+    $("#ea-gal", m).innerHTML = draft.photos.map((ph, i) => `<span class="gthumb" style="background-image:${esc(cssUrl(imgUrl(ph)))}"><button data-gx="${i}" title="Remove">&#10005;</button></span>`).join("")
+      + (draft.photos.length < 6 ? `<button class="gadd" data-up="photo">+ Add</button>` : "");
+    $$("[data-gx]", m).forEach(b => b.onclick = () => { draft.photos.splice(+b.dataset.gx, 1); drawPics(); });
+    $$("[data-up]", m).forEach(b => b.onclick = () => pickImage(b.dataset.up).then(url => { if (!url) return; if (b.dataset.up === "photo") draft.photos.push(url); else draft[b.dataset.up] = url; drawPics(); }));
+  };
+  $$("[data-clear]", m).forEach(b => b.onclick = () => { draft[b.dataset.clear] = ""; drawPics(); });
+  drawPics();
   const loadSong = () => { const id = $("#ea-song", m).value, t = byId.get(id); $("#ea-lyrics", m).value = draft.lyrics[id] ?? p.lyrics?.[id] ?? t?.d.lyrics ?? ""; $("#ea-story", m).value = draft.stories[id] ?? p.stories?.[id] ?? ""; };
   const keepSong = () => { const id = $("#ea-song", m).value; draft.lyrics[id] = $("#ea-lyrics", m).value.trim(); draft.stories[id] = $("#ea-story", m).value.trim(); };
   let cur = $("#ea-song", m).value; loadSong();
@@ -750,8 +816,12 @@ function editArtist(name, focusTid) {
     keepSong();
     const links = {}; $$("[data-link]", m).forEach(i => { links[i.dataset.link] = i.value.trim(); });
     const pick = $("#ea-pick", m).value ? { release: $("#ea-pick", m).value, note: $("#ea-note", m).value.trim() } : null;
-    store.set("profile:" + name, { tagline: $("#ea-tag", m).value.trim(), location: $("#ea-loc", m).value.trim(), bio: $("#ea-bio", m).value.trim(),
-      banner: $("#ea-banner", m).value.trim(), avatar: $("#ea-av", m).value.trim(), links, pick, lyrics: draft.lyrics, stories: draft.stories });
+    const videos = $("#ea-vids", m).value.split(/\s+/).map(u => (u.match(/(?:youtu\.be\/|v=|embed\/|shorts\/)([\w-]{11})/) || [])[1]).filter(Boolean).map(id => ({ id, title: (p.videos || []).find(v => v.id === id)?.title || "Video" }));
+    try {
+      store.set("profile:" + name, { tagline: $("#ea-tag", m).value.trim(), location: $("#ea-loc", m).value.trim(), bio: $("#ea-bio", m).value.trim(),
+        banner: draft.banner, avatar: draft.avatar, photos: draft.photos, photoCredit: $("#ea-credit", m).value.trim(), videos, links, pick, lyrics: draft.lyrics, stories: draft.stories });
+      if (!localStorage.getItem("profile:" + name)) throw new Error("full");
+    } catch { toast("Couldn't save: this device is out of space for photos. Try fewer gallery photos."); return; }
     MODAL_DIRTY = true; closeModal(); toast("Artist page saved");
   };
 }
@@ -1477,7 +1547,7 @@ function playlistsPage(focus) {
   const entryTracks = entry ? entry.ids.map(i => byId.get(i)).filter(Boolean) : [];
   view().innerHTML = `
   <section class="manifesto curate-hero"><div class="eyebrow">Playlists · for curators</div>
-    <h1>Your taste is worth something.</h1>
+    <h1>Good taste pays.</h1>
     <p>Build playlists, answer the brief, and earn when listeners collect the songs you found.</p>
     <div class="actions"><button class="btn big" id="be-curator">Become a curator</button><a class="btn ghost big" href="#/playlists/brief">This week's brief</a></div></section>
 
